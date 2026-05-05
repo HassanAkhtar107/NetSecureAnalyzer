@@ -1,46 +1,77 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { NetworkProvider } from "@/context/NetworkContext";
-import AppLayout from "@/components/AppLayout";
-import DashboardPage from "@/pages/DashboardPage";
-import DevicesPage from "@/pages/DevicesPage";
-import DataTransferPage from "@/pages/DataTransferPage";
-import FirewallPage from "@/pages/FirewallPage";
-import VPNPage from "@/pages/VPNPage";
-import TopologyPage from "@/pages/TopologyPage";
-import ReportsPage from "@/pages/ReportsPage";
-import SettingsPage from "@/pages/SettingsPage";
-import NotFound from "@/pages/NotFound";
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import Layout from './components/Layout';
+import Dashboard from './pages/Dashboard';
+import Devices from './pages/Devices';
+import Topology from './pages/Topology';
+import Transfers from './pages/Transfers';
+import Login from './pages/Login';
+import Signup from './pages/Signup';
+import Performance from './pages/Performance';
+import VPN from './pages/VPN';
+import Firewall from './pages/Firewall';
+import Settings from './pages/Settings';
 
-const queryClient = new QueryClient();
+const App: React.FC = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return localStorage.getItem('isAuthenticated') === 'true';
+  });
+  const [userType, setUserType] = useState<'ADMIN' | 'USER'>(() => {
+    return (localStorage.getItem('userType') as 'ADMIN' | 'USER') || 'USER';
+  });
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <NetworkProvider>
-          <AppLayout>
-            <Routes>
-              <Route path="/" element={<DashboardPage />} />
-              <Route path="/devices" element={<DevicesPage />} />
-              <Route path="/data-transfer" element={<DataTransferPage />} />
-              <Route path="/firewall" element={<FirewallPage />} />
-              <Route path="/vpn" element={<VPNPage />} />
-              <Route path="/topology" element={<TopologyPage />} />
-              <Route path="/reports" element={<ReportsPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </AppLayout>
-        </NetworkProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+  const handleLogin = (type: 'ADMIN' | 'USER', token: string) => {
+    setUserType(type);
+    setIsAuthenticated(true);
+    localStorage.setItem('isAuthenticated', 'true');
+    localStorage.setItem('userType', type);
+    localStorage.setItem('token', token);
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    localStorage.removeItem('isAuthenticated');
+    localStorage.removeItem('userType');
+    localStorage.removeItem('token');
+  };
+
+  return (
+    <Router>
+      <Routes>
+        <Route
+          path="/login"
+          element={!isAuthenticated ? <Login onLogin={handleLogin} /> : <Navigate to="/" replace />}
+        />
+        <Route
+          path="/signup"
+          element={!isAuthenticated ? <Signup onSignup={handleLogin} /> : <Navigate to="/" replace />}
+        />
+
+        <Route
+          path="/*"
+          element={
+            isAuthenticated ? (
+              <Layout userType={userType} onLogout={handleLogout}>
+                <Routes>
+                  <Route path="/" element={<Dashboard userType={userType} />} />
+                  <Route path="/devices" element={<Devices userType={userType} />} />
+                  <Route path="/topology" element={<Topology />} />
+                  <Route path="/transfers" element={<Transfers userType={userType} />} />
+                  <Route path="/vpn" element={<VPN />} />
+                  <Route path="/firewall" element={<Firewall />} />
+                  <Route path="/performance" element={<Performance />} />
+                  <Route path="/settings" element={<Settings />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </Layout>
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+      </Routes>
+    </Router>
+  );
+};
 
 export default App;

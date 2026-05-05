@@ -23,6 +23,7 @@ class User(AbstractUser):
     otp_counter = models.IntegerField(default=0)
     user_type = models.CharField(choices=USER_TYPE,max_length=10,null=True,blank=True)
     stripe_customer_id = models.CharField(max_length=255, null=True, blank=True)
+    assigned_network = models.ForeignKey("analyzer.Network", on_delete=models.SET_NULL, null=True, blank=True, related_name='users')
     
     def get_absolute_url(self):
         """Get url for user's detail view.

@@ -10,11 +10,18 @@ from users.api.views import (
     resetPasswordView,
     userProfileView,
     deleteUserView,
-    AdminUserViewSet,
-
+    AdminUserViewSet
 )
 
-
+from analyzer.api.views import (
+    NetworkViewSet,
+    DeviceViewSet,
+    DataTransferViewSet,
+    FirewallLogViewSet,
+    VPNServerViewSet,
+    AttackSimulationViewSet,
+    VPNStatusViewSet
+)
 
 if settings.DEBUG:
     router = DefaultRouter()
@@ -32,8 +39,14 @@ router.register("user-profile", userProfileView, basename="user-profile")
 router.register("delete-user", deleteUserView, basename="delete-user")
 router.register("admin_users", AdminUserViewSet, basename="admin-users")
 
-
-
+# analyzer
+router.register("networks", NetworkViewSet, basename="network")
+router.register("devices", DeviceViewSet, basename="device")
+router.register("transfers", DataTransferViewSet, basename="transfer")
+router.register("firewall-logs", FirewallLogViewSet, basename="firewall-log")
+router.register("vpn-servers", VPNServerViewSet, basename="vpn-server")
+router.register("vpn-status", VPNStatusViewSet, basename="vpn-status")
+router.register("attack-simulations", AttackSimulationViewSet, basename="attack-simulation")
 
 
 app_name = "api"

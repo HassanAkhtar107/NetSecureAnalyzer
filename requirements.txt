@@ -3,7 +3,7 @@ Django==4.2.7
 django-environ==0.11.2
 
 # Database
-psycopg2-binary==2.9.9
+psycopg2-binary
 
 # Django REST Framework
 djangorestframework==3.14.0
@@ -66,9 +66,7 @@ pytest-django==4.7.0
 # Code Quality (Development)
 black==23.11.0
 
-
 pillow==11.3.0
-
 flower
-
 sendgrid
+psutil==5.9.6

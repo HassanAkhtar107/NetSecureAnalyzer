@@ -14,13 +14,10 @@ from dj_rest_auth.registration.views import SocialLoginView
 from dj_rest_auth.registration.serializers import SocialLoginSerializer
 from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.serializers import AuthTokenSerializer
-from users.models import User, UserProfile, SubscriptionPlan, UserSubscription, UserPaymentMethod
+from users.models import User, UserProfile
 from .serializers import (
     UserSerializer,
     UserProfileSerializer,
-    SubscriptionPlanSerializer,
-    UserSubscriptionSerializer,
-    UserPaymentMethodSerializer,
     SignupSerializer,
     AdminUserSerializer
 )
@@ -102,15 +99,6 @@ class LoginViewSet(ViewSet):
         token, created = Token.objects.get_or_create(user=user)
         user_serializer = UserSerializer(user)
         if user.is_verified == True:
-            # Allow ADMIN users to always log in
-            # For regular users, check for active subscription
-            if user.user_type != "ADMIN":
-                has_active_sub = user.subscriptions.filter(status="active").exists()
-                if not has_active_sub:
-                    return Response(
-                        {"non_field_errors": ["Your account does not have an active subscription. Please contact the administrator."]},
-                        status=status.HTTP_403_FORBIDDEN,
-                    )
             return Response(
                 {"token": token.key, "user": user_serializer.data},
                 status=status.HTTP_200_OK,

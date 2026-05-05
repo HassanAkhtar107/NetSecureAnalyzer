@@ -12,12 +12,12 @@ from ..models import *
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["id", "email", "name", "is_verified","user_type"]
+        fields = ["id", "email", "name", "is_verified", "user_type", "assigned_network"]
         
 class SignupSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ("id", "name", "email", "password","user_type")
+        fields = ("id", "name", "email", "password", "user_type")
         extra_kwargs = {
             "password": {"write_only": True, "style": {"input_type": "password"}},
             "email": {
@@ -70,53 +70,28 @@ class SignupSerializer(serializers.ModelSerializer):
         """rest_auth passes request so we must override to accept it"""
         return super().save()
     
-    
-    
 class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserProfile
         fields = "__all__"
         read_only_fields = ["id"]
         
-        
 class PasswordSerializer(PasswordResetSerializer):
     """Custom serializer for rest_auth to solve reset password error"""
-
     password_reset_form_class = ResetPasswordForm
 
-
 class AdminUserSerializer(serializers.ModelSerializer):
-    assigned_templates = serializers.PrimaryKeyRelatedField(
-        read_only=True,
-        many=True
-    )
-    assigned_templates_ids = serializers.ListField(
-        child=serializers.IntegerField(),
-        write_only=True,
-        required=False
-    )
     password = serializers.CharField(write_only=True, required=False)
-    has_payment_added = serializers.SerializerMethodField()
-    has_subscription = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
             "id", "username", "name", "email", "user_type", 
-            "is_verified", "assigned_templates", "assigned_templates_ids", 
-            "password", "has_payment_added", "has_subscription"
+            "is_verified", "assigned_network", "password"
         ]
 
-    def get_has_payment_added(self, obj):
-        return obj.payment_methods.exists()
-
-    def get_has_subscription(self, obj):
-        return obj.subscriptions.filter(status="active").exists()
-
     def create(self, validated_data):
-        assigned_templates_ids = validated_data.pop('assigned_templates_ids', [])
         password = validated_data.pop('password', None)
-        
         user = User.objects.create(**validated_data)
         if password:
             user.set_password(password)
@@ -125,38 +100,14 @@ class AdminUserSerializer(serializers.ModelSerializer):
             
         user.is_verified = True
         user.save()
-        
-        if assigned_templates_ids:
-            from templates.models import Templates
-            templates = Templates.objects.filter(id__in=assigned_templates_ids)
-            for t in templates:
-                t.assigned_users.add(user)
-            
         return user
 
     def update(self, instance, validated_data):
-        assigned_templates_ids = validated_data.pop('assigned_templates_ids', None)
         password = validated_data.pop('password', None)
-        
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
-            
         if password:
             instance.set_password(password)
-            
         instance.save()
-        
-        if assigned_templates_ids is not None:
-            from templates.models import Templates
-            # Clear existing assignments first
-            assigned_templates = instance.assigned_templates.all()
-            for t in assigned_templates:
-                t.assigned_users.remove(instance)
-            
-            # Add new assignments
-            new_templates = Templates.objects.filter(id__in=assigned_templates_ids)
-            for t in new_templates:
-                t.assigned_users.add(instance)
-            
         return instance
 

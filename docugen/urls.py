@@ -42,7 +42,7 @@ urlpatterns = [
     path("api/", include("docugen.api_router")),
 ]
 
-
+# urlpatterns.append(path("api/improve-text/", improve_text_view, name="improve-text"))
 admin.site.site_header = "Kapoor Software Solutions"
 admin.site.site_title = "Kapoor Software Solutions Admin Portal"
 admin.site.index_title = "Kapoor Software Solutions Admin"
