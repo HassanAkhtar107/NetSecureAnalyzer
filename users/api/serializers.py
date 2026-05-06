@@ -10,21 +10,19 @@ from django.utils.translation import gettext_lazy as _
 from ..models import *
 
 class UserSerializer(serializers.ModelSerializer):
+    assigned_network_name = serializers.CharField(source='assigned_network.name', read_only=True)
+    
     class Meta:
         model = User
-        fields = ["id", "email", "name", "is_verified", "user_type", "assigned_network"]
+        fields = ["id", "email", "name", "is_verified", "user_type", "assigned_network", "assigned_network_name"]
         
 class SignupSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ("id", "name", "email", "password", "user_type")
+        fields = ("id", "name", "email", "password")
         extra_kwargs = {
             "password": {"write_only": True, "style": {"input_type": "password"}},
             "email": {
-                "required": True,
-                "allow_blank": False,
-            },
-            "user_type": {
                 "required": True,
                 "allow_blank": False,
             },
@@ -50,16 +48,14 @@ class SignupSerializer(serializers.ModelSerializer):
         return email
 
     def create(self, validated_data):
-        user_type = validated_data.pop("user_type", None)
-        password = validated_data.get("password")
-        user = User(**validated_data)
-        if user_type:
-            if user_type == "ADMIN":
-                user.is_staff = True
-                user.is_superuser = True
-            user.user_type = user_type.upper()
-        else:
-            user.user_type = "USER"
+        password = validated_data.pop("password")
+        email = validated_data.get("email", "")
+        name = validated_data.get("name", "")
+        # Use email as the username to satisfy the DB constraint without extra fields
+        user = User(username=email, name=name, email=email)
+        user.user_type = "USER"
+        user.is_staff = False
+        user.is_superuser = False
         user.set_password(password)
         user.save()
         request = self._get_request()
@@ -92,6 +88,12 @@ class AdminUserSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         password = validated_data.pop('password', None)
+        email = validated_data.get('email')
+        user_type = validated_data.get('user_type', 'USER')
+        
+        # Use email as username
+        validated_data['username'] = email
+        
         user = User.objects.create(**validated_data)
         if password:
             user.set_password(password)
@@ -99,6 +101,13 @@ class AdminUserSerializer(serializers.ModelSerializer):
             user.set_unusable_password()
             
         user.is_verified = True
+        if user_type == 'ADMIN':
+            user.is_staff = True
+            user.is_superuser = True
+        else:
+            user.is_staff = False
+            user.is_superuser = False
+            
         user.save()
         return user
 

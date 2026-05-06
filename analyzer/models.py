@@ -4,6 +4,7 @@ from django.conf import settings
 class Network(models.Model):
     name = models.CharField(max_length=255)
     range_cidr = models.CharField(max_length=50, help_text="e.g. 192.168.1.0/24")
+    firewall_enabled = models.BooleanField(default=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -45,6 +46,7 @@ class DataTransfer(models.Model):
         ('FAILED', 'Failed'),
         ('STOPPED', 'Stopped'),
     )
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, related_name='initiated_transfers')
     sender_device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='sent_transfers')
     receiver_device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='received_transfers')
     bandwidth = models.FloatField(default=0.0)
@@ -80,6 +82,7 @@ class VPNServer(models.Model):
     ip_address = models.GenericIPAddressField()
     latency = models.IntegerField(default=20)
     is_active = models.BooleanField(default=True)
+    is_private = models.BooleanField(default=False)
 
     def __str__(self):
         return f"{self.name} ({self.country})"

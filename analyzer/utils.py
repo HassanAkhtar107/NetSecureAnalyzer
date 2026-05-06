@@ -28,20 +28,37 @@ def unblock_ip(ip_address):
     except subprocess.CalledProcessError:
         return False
 
-def get_network_stats():
+def get_network_stats(network_id=None):
     """
     Returns real-time network usage stats using psutil.
+    In a real system, this would filter by network interfaces or VLANs.
+    For simulation, we return global stats or mock stats for a network.
     """
+    from .models import Device, Network
+    
     net_io = psutil.net_io_counters()
+    
+    if network_id:
+        # Mock network-specific stats
+        device_count = Device.objects.filter(network_id=network_id).count()
+        blocked_count = Device.objects.filter(network_id=network_id, status='BLOCKED').count()
+        
+        return {
+            "total_data_usage": (net_io.bytes_sent + net_io.bytes_recv) / 1024, # Simulate MB
+            "active_devices": device_count,
+            "blocked_devices": blocked_count,
+            "ping": 23,
+            "jitter": 6,
+        }
+
+    # Global stats for Admin
     return {
-        "bytes_sent": net_io.bytes_sent,
-        "bytes_recv": net_io.bytes_recv,
-        "packets_sent": net_io.packets_sent,
-        "packets_recv": net_io.packets_recv,
-        "errin": net_io.errin,
-        "errout": net_io.errout,
-        "dropin": net_io.dropin,
-        "dropout": net_io.dropout,
+        "total_data_usage": (net_io.bytes_sent + net_io.bytes_recv) / 1024,
+        "active_devices": Device.objects.count(),
+        "blocked_devices": Device.objects.filter(status='BLOCKED').count(),
+        "total_networks": Network.objects.count(),
+        "ping": 23,
+        "jitter": 6,
     }
 
 def is_ip_in_network(ip, cidr):
