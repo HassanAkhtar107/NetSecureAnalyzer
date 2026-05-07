@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from ..models import Network, Device, DataTransfer, FirewallLog, VPNServer, AttackSimulation, VPNStatus
+from ..models import Network, Device, DataTransfer, FirewallLog, VPNServer, VPNStatus, FirewallRule
 
 class NetworkSerializer(serializers.ModelSerializer):
     device_count = serializers.IntegerField(read_only=True, required=False)
@@ -34,12 +34,12 @@ class VPNServerSerializer(serializers.ModelSerializer):
         model = VPNServer
         fields = '__all__'
 
-class AttackSimulationSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = AttackSimulation
-        fields = '__all__'
-
 class VPNStatusSerializer(serializers.ModelSerializer):
     class Meta:
         model = VPNStatus
         fields = ['is_active', 'selected_country', 'simulated_ip', 'updated_at']
+
+class FirewallRuleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FirewallRule
+        fields = '__all__'

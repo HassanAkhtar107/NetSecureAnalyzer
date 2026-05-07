@@ -27,15 +27,18 @@ from django_celery_beat.models import ClockedSchedule, SolarSchedule, IntervalSc
 from django.contrib.sites.models import Site
 from django.contrib.auth.models import Group
 
-admin.site.unregister(TokenProxy)
-admin.site.unregister(SocialToken)
-admin.site.unregister(SocialAccount)
-admin.site.unregister(SocialApp)
-admin.site.unregister(ClockedSchedule)
-admin.site.unregister(SolarSchedule)
-admin.site.unregister(IntervalSchedule)
-admin.site.unregister(Site)
-admin.site.unregister(Group)
+try:
+    admin.site.unregister(TokenProxy)
+    admin.site.unregister(SocialToken)
+    admin.site.unregister(SocialAccount)
+    admin.site.unregister(SocialApp)
+    admin.site.unregister(ClockedSchedule)
+    admin.site.unregister(SolarSchedule)
+    admin.site.unregister(IntervalSchedule)
+    admin.site.unregister(Site)
+    admin.site.unregister(Group)
+except admin.sites.NotRegistered:
+    pass
 
 urlpatterns = [
     path("admin/", admin.site.urls),

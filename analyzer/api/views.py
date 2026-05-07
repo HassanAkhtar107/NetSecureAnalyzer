@@ -2,15 +2,15 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.db.models import Count
-from ..models import Network, Device, DataTransfer, FirewallLog, VPNServer, AttackSimulation, VPNStatus
+from ..models import Network, Device, DataTransfer, FirewallLog, VPNServer, VPNStatus, FirewallRule
 from .serializers import (
     NetworkSerializer,
     DeviceSerializer,
     DataTransferSerializer,
     FirewallLogSerializer,
     VPNServerSerializer,
-    AttackSimulationSerializer,
-    VPNStatusSerializer
+    VPNStatusSerializer,
+    FirewallRuleSerializer
 )
 from ..utils import block_ip, unblock_ip, get_network_stats, simulate_transfer_stats
 
@@ -109,6 +109,41 @@ class DeviceViewSet(viewsets.ModelViewSet):
         )
         return Response({"status": "Device unblocked"})
 
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        if request.user.user_type != 'ADMIN':
+            return Response({"error": "Only admins can approve devices"}, status=status.HTTP_403_FORBIDDEN)
+        device = self.get_object()
+        device.status = 'ACTIVE'
+        device.is_approved = True
+        device.save()
+        
+        FirewallLog.objects.create(
+            action='ALLOW',
+            source_ip=device.ip_address,
+            reason="Device join request approved"
+        )
+        return Response({"status": "Device approved"})
+
+    @action(detail=True, methods=['post'])
+    def deny(self, request, pk=None):
+        if request.user.user_type != 'ADMIN':
+            return Response({"error": "Only admins can deny devices"}, status=status.HTTP_403_FORBIDDEN)
+        device = self.get_object()
+        device.status = 'BLOCKED'
+        device.is_approved = False
+        device.save()
+        
+        # Also block IP in firewall as per SRS (Denying a join request blocks future attempts)
+        block_ip(device.ip_address)
+        
+        FirewallLog.objects.create(
+            action='BLOCK',
+            source_ip=device.ip_address,
+            reason="Device join request denied"
+        )
+        return Response({"status": "Device denied"})
+
 class DataTransferViewSet(viewsets.ModelViewSet):
     queryset = DataTransfer.objects.all()
     serializer_class = DataTransferSerializer
@@ -168,6 +203,23 @@ class FirewallLogViewSet(viewsets.ReadOnlyModelViewSet):
         if self.request.user.user_type == 'ADMIN':
             return FirewallLog.objects.all().order_by('-timestamp')
         return FirewallLog.objects.none()
+
+class FirewallRuleViewSet(viewsets.ModelViewSet):
+    queryset = FirewallRule.objects.all().order_by('-created_at')
+    serializer_class = FirewallRuleSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        if self.request.user.user_type != 'ADMIN':
+            return FirewallRule.objects.none()
+        return super().get_queryset()
+
+    @action(detail=True, methods=['post'])
+    def toggle(self, request, pk=None):
+        rule = self.get_object()
+        rule.is_active = not rule.is_active
+        rule.save()
+        return Response({"status": "success", "is_active": rule.is_active})
 
 class VPNServerViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = VPNServer.objects.all()
@@ -251,31 +303,4 @@ class VPNStatusViewSet(viewsets.ViewSet):
         
         return Response(VPNStatusSerializer(status_obj).data)
 
-class AttackSimulationViewSet(viewsets.ModelViewSet):
-    queryset = AttackSimulation.objects.all()
-    serializer_class = AttackSimulationSerializer
-    permission_classes = [permissions.IsAuthenticated]
 
-    @action(detail=False, methods=['post'])
-    def trigger(self, request):
-        if request.user.user_type != 'ADMIN':
-            return Response({"error": "Admin access required"}, status=status.HTTP_403_FORBIDDEN)
-        
-        attack_type = request.data.get('type', 'DDOS')
-        network_id = request.data.get('network_id')
-        
-        try:
-            network = Network.objects.get(id=network_id)
-        except Network.DoesNotExist:
-            return Response({"error": "Network not found"}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Log the "detected" attack in firewall logs
-        FirewallLog.objects.create(
-            action='ATTACK_DETECTED',
-            source_ip="14.21.35.22", # Simulated attacker IP
-            reason=f"High volume {attack_type} signature detected on {network.name}",
-            latency_impact=25.5,
-            throughput_impact=-15.2
-        )
-
-        return Response({"status": "Simulation started", "message": f"{attack_type} attack simulated on {network.name}"})

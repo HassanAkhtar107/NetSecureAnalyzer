@@ -76,6 +76,30 @@ class FirewallLog(models.Model):
     def __str__(self):
         return f"{self.action}: {self.source_ip} at {self.timestamp}"
 
+class FirewallRule(models.Model):
+    TYPE_CHOICES = (
+        ('ALLOW', 'Allow'),
+        ('DENY', 'Deny'),
+    )
+    PROTOCOL_CHOICES = (
+        ('TCP', 'TCP'),
+        ('UDP', 'UDP'),
+        ('ICMP', 'ICMP'),
+        ('ALL', 'All Protocols'),
+    )
+    name = models.CharField(max_length=255)
+    rule_type = models.CharField(max_length=10, choices=TYPE_CHOICES, default='DENY')
+    ip_address = models.CharField(max_length=100, null=True, blank=True, help_text="Specific IP or Subnet")
+    mac_address = models.CharField(max_length=100, null=True, blank=True)
+    port = models.IntegerField(null=True, blank=True)
+    protocol = models.CharField(max_length=10, choices=PROTOCOL_CHOICES, default='ALL')
+    is_active = models.BooleanField(default=True)
+    hits = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.rule_type}: {self.name}"
+
 class VPNServer(models.Model):
     name = models.CharField(max_length=100)
     country = models.CharField(max_length=100)
@@ -86,19 +110,6 @@ class VPNServer(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.country})"
-
-class AttackSimulation(models.Model):
-    TYPE_CHOICES = (
-        ('DDOS', 'DDoS Attack'),
-        ('BRUTE_FORCE', 'Brute Force'),
-        ('SQL_INJECTION', 'SQL Injection'),
-        ('PORT_SCAN', 'Port Scan'),
-    )
-    attack_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
-    target_network = models.ForeignKey(Network, on_delete=models.CASCADE)
-    intensity = models.IntegerField(default=50)
-    is_active = models.BooleanField(default=False)
-    started_at = models.DateTimeField(auto_now_add=True)
 
 class VPNStatus(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='vpn_status')

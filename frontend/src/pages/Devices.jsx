@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {motion as m, AnimatePresence} from 'framer-motion';
+
 import {
   Search, Filter, Shield, ShieldOff, Info, UserPlus, Loader2, Plus, X, User, Trash2,
   Network, Server, Activity, Laptop, Smartphone, Globe, Send, Share2, File, Image, Video, FileText, Download
@@ -13,6 +13,9 @@ const Devices = ({ userType }) => {
   const [networks, setNetworks] = useState([]);
   const [allDevices, setAllDevices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [adminTab, setAdminTab] = useState('users'); // 'users' or 'devices'
+  const [pendingDevices, setPendingDevices] = useState([]);
+  const [managedDevices, setManagedDevices] = useState([]);
 
   // Sharing Flow State
   const [isSharing, setIsSharing] = useState(false);
@@ -61,7 +64,10 @@ const Devices = ({ userType }) => {
     setLoading(true);
     try {
       const res = await devicesApi.list();
-      setAllDevices(res.data || []);
+      const all = Array.isArray(res.data) ? res.data : [];
+      setAllDevices(all);
+      setManagedDevices(all.filter(d => d.is_approved));
+      setPendingDevices(all.filter(d => !d.is_approved));
     } catch (err) {
       console.error("Failed to fetch devices", err);
     } finally {
@@ -72,13 +78,15 @@ const Devices = ({ userType }) => {
   const fetchAllNetworks = async () => {
     try {
       const res = await networksApi.list();
-      setNetworks(res.data || []);
+      const data = Array.isArray(res.data) ? res.data : [];
+      setNetworks(data);
     } catch (err) { }
   };
 
   useEffect(() => {
     if (userType === 'ADMIN') {
       fetchAdminData();
+      fetchAllDevices();
     } else {
       fetchAllDevices();
       fetchAllNetworks();
@@ -111,6 +119,47 @@ const Devices = ({ userType }) => {
     } catch (err) {
       console.error("Delete failed", err);
       toast.error("Failed to delete user");
+    }
+  };
+
+  const handleApproveDevice = async (id) => {
+    try {
+      await devicesApi.approve(id);
+      toast.success("Device join request approved");
+      fetchAllDevices();
+    } catch (err) {
+      toast.error("Failed to approve device");
+    }
+  };
+
+  const handleDenyDevice = async (id) => {
+    if (!window.confirm("Denying will block this device from future attempts. Continue?")) return;
+    try {
+      await devicesApi.deny(id);
+      toast.success("Join request denied and device blacklisted");
+      fetchAllDevices();
+    } catch (err) {
+      toast.error("Failed to deny device");
+    }
+  };
+
+  const handleBlockDevice = async (id) => {
+    try {
+      await devicesApi.block(id);
+      toast.success("Device blocked and firewall rule updated");
+      fetchAllDevices();
+    } catch (err) {
+      toast.error("Failed to block device");
+    }
+  };
+
+  const handleUnblockDevice = async (id) => {
+    try {
+      await devicesApi.unblock(id);
+      toast.success("Device unblocked");
+      fetchAllDevices();
+    } catch (err) {
+      toast.error("Failed to unblock device");
     }
   };
 
@@ -149,192 +198,258 @@ const Devices = ({ userType }) => {
     }
   };
 
-  // --- ADMIN VIEW (USER MANAGEMENT) ---
+  // --- ADMIN VIEW ---
   if (userType === 'ADMIN') {
     return (
-      <m.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="space-y-6"
-      >
-        <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-slate-900/50 p-4 rounded-2xl border border-slate-800">
-          <div className="relative w-full md:w-96">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-            <input
-              type="text"
-              placeholder="Search users by name or email..."
-              className="w-full bg-slate-950/50 border border-slate-800 rounded-xl py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-sky-500/50 transition-colors"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          <button
-            onClick={() => setShowAddUser(true)}
-            className="w-full md:w-auto px-6 py-2.5 bg-sky-500 text-slate-950 rounded-xl text-sm font-bold hover:bg-sky-400 transition-colors flex items-center justify-center gap-2"
+      <div className="space-y-6 animate-fade-in">
+        {/* Tab Switcher */}
+        <div className="flex gap-2 p-1 bg-slate-900/50 rounded-2xl border border-slate-800 w-fit">
+          <button 
+            onClick={() => setAdminTab('users')}
+            className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${adminTab === 'users' ? 'bg-sky-500 text-slate-950' : 'text-slate-500 hover:text-slate-300'}`}
           >
-            <UserPlus size={16} />
-            Provision New User
+            User Management
+          </button>
+          <button 
+            onClick={() => setAdminTab('devices')}
+            className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${adminTab === 'devices' ? 'bg-sky-500 text-slate-950' : 'text-slate-500 hover:text-slate-300'}`}
+          >
+            Network Infrastructure
           </button>
         </div>
 
-        <AP>
-          {showAddUser && (
-            <m.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm"
-            >
-              <m.div
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.9, opacity: 0 }}
-                className="bg-[#0a0f1d] border border-slate-800 rounded-3xl p-8 w-full max-md shadow-2xl relative"
+        {adminTab === 'users' ? (
+          <>
+            <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-slate-900/50 p-4 rounded-2xl border border-slate-800">
+              <div className="relative w-full md:w-96">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                <input
+                  type="text"
+                  placeholder="Search users by name or email..."
+                  className="w-full bg-slate-950/50 border border-slate-800 rounded-xl py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-sky-500/50 transition-colors"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <button
+                onClick={() => setShowAddUser(true)}
+                className="w-full md:w-auto px-6 py-2.5 bg-sky-500 text-slate-950 rounded-xl text-sm font-bold hover:bg-sky-400 transition-colors flex items-center justify-center gap-2"
               >
-                <button
-                  onClick={() => setShowAddUser(false)}
-                  className="absolute top-4 right-4 p-2 text-slate-500 hover:text-white transition-colors"
-                >
-                  <X size={20} />
-                </button>
+                <UserPlus size={16} />
+                Provision New User
+              </button>
+            </div>
 
-                <h3 className="text-xl font-bold mb-6 flex items-center gap-3">
-                  <div className="p-2 bg-sky-500/10 rounded-lg">
-                    <UserPlus className="text-sky-400" size={20} />
-                  </div>
-                  Create Network User
+            {showAddUser && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+                <div className="bg-[#0a0f1d] border border-slate-800 rounded-3xl p-8 w-full max-md shadow-2xl relative">
+                  <button onClick={() => setShowAddUser(false)} className="absolute top-4 right-4 p-2 text-slate-500 hover:text-white"><X size={20} /></button>
+                  <h3 className="text-xl font-bold mb-6 flex items-center gap-3">
+                    <div className="p-2 bg-sky-500/10 rounded-lg"><UserPlus className="text-sky-400" size={20} /></div>
+                    Create Network User
+                  </h3>
+                  <form onSubmit={handleAddUser} className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Full Name</label>
+                      <input type="text" required className="w-full bg-slate-950/50 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-sky-500/50" value={newUser.name} onChange={(e) => setNewUser({ ...newUser, name: e.target.value })} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Email Address</label>
+                      <input type="email" required className="w-full bg-slate-950/50 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-sky-500/50" value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Initial Password</label>
+                      <input type="password" required className="w-full bg-slate-950/50 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-sky-500/50" value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">User Role</label>
+                        <select className="w-full bg-slate-950/50 border border-slate-800 rounded-xl px-4 py-3 text-sm" value={newUser.user_type} onChange={(e) => setNewUser({ ...newUser, user_type: e.target.value })}>
+                          <option value="USER">Standard User</option>
+                          <option value="ADMIN">System Admin</option>
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Network Assignment</label>
+                        <select className="w-full bg-slate-950/50 border border-slate-800 rounded-xl px-4 py-3 text-sm" value={newUser.assigned_network} onChange={(e) => setNewUser({ ...newUser, assigned_network: e.target.value })}>
+                          <option value="">No Network</option>
+                          {networks.map(n => <option key={n.id} value={n.id}>{n.name}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <button type="submit" className="w-full bg-sky-500 text-slate-950 py-4 rounded-xl font-bold text-sm hover:bg-sky-400 transition-all mt-4">Create and Provision</button>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            <div className="glass-panel overflow-hidden border-slate-800">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-800/30 text-slate-400 text-xs uppercase tracking-wider">
+                    <th className="px-6 py-4 font-semibold">User Profile</th>
+                    <th className="px-6 py-4 font-semibold">Role</th>
+                    <th className="px-6 py-4 font-semibold">Assigned Network</th>
+                    <th className="px-6 py-4 font-semibold text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/50">
+                  {Array.isArray(users) && users.filter(u =>
+                    String(u?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    String(u?.email || '').toLowerCase().includes(searchTerm.toLowerCase())
+                  ).map((u) => (
+                    <tr key={u.id} className="group hover:bg-slate-800/20 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700"><User className="text-sky-400" size={18} /></div>
+                          <div><p className="font-semibold text-sm">{u.name}</p><p className="text-xs text-slate-500 font-mono">{u.email}</p></div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest ${u.user_type === 'ADMIN' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'bg-sky-500/10 text-sky-400 border border-sky-500/20'}`}>
+                          {u.user_type}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2 text-sm text-slate-300"><Network size={14} className="text-slate-500" />{Array.isArray(networks) && networks.find(n => String(n?.id) === String(u?.assigned_network))?.name || 'None'}</div>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button onClick={() => handleDeleteUser(u.id)} className="p-2 hover:bg-rose-500/10 text-rose-400 rounded-lg transition-colors"><Trash2 size={16} /></button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : (
+          <div className="space-y-8">
+            {/* Pending Requests Section */}
+            {pendingDevices.length > 0 && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-bold flex items-center gap-2 text-amber-400">
+                  <AlertTriangle size={20} /> Pending Join Requests
                 </h3>
+                <div className="glass-panel overflow-hidden border-amber-500/20 bg-amber-500/[0.02]">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-amber-500/10 text-amber-500/70 text-[10px] uppercase tracking-widest">
+                        <th className="px-6 py-3 font-bold">Identifier (IP/MAC)</th>
+                        <th className="px-6 py-3 font-bold">Network Context</th>
+                        <th className="px-6 py-3 font-bold">Timestamp</th>
+                        <th className="px-6 py-3 font-bold text-right">Verification</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-amber-500/10">
+                      {pendingDevices.map(d => (
+                        <tr key={d.id} className="hover:bg-amber-500/5 transition-colors">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 bg-amber-500/10 rounded-lg text-amber-500"><Info size={16} /></div>
+                              <div>
+                                <p className="text-sm font-bold text-slate-200">{d.ip_address}</p>
+                                <p className="text-[10px] font-mono text-amber-500/60 uppercase">Heuristic Discovery</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-xs text-slate-400">{d.network_name || 'Subnet Alpha'}</td>
+                          <td className="px-6 py-4 text-xs text-slate-500 font-mono">{new Date(d.created_at).toLocaleString()}</td>
+                          <td className="px-6 py-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button 
+                                onClick={() => handleApproveDevice(d.id)}
+                                className="px-4 py-1.5 bg-emerald-500 text-slate-950 rounded-lg text-[10px] font-bold uppercase hover:bg-emerald-400 transition-colors"
+                              >
+                                Approve
+                              </button>
+                              <button 
+                                onClick={() => handleDenyDevice(d.id)}
+                                className="px-4 py-1.5 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-lg text-[10px] font-bold uppercase hover:bg-rose-500/20 transition-colors"
+                              >
+                                Deny
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
-                <form onSubmit={handleAddUser} className="space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Full Name</label>
-                    <input
-                      type="text" required
-                      className="w-full bg-slate-950/50 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-sky-500/50"
-                      placeholder="John Doe"
-                      value={newUser.name}
-                      onChange={(e) => setNewUser({ name: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Email Address</label>
-                    <input
-                      type="email" required
-                      className="w-full bg-slate-950/50 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-sky-500/50"
-                      placeholder="user@network.com"
-                      value={newUser.email}
-                      onChange={(e) => setNewUser({ email: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Initial Password</label>
-                    <input
-                      type="password" required
-                      className="w-full bg-slate-950/50 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-sky-500/50"
-                      placeholder="••••••••"
-                      value={newUser.password}
-                      onChange={(e) => setNewUser({ password: e.target.value })}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">User Role</label>
-                      <select
-                        className="w-full bg-slate-950/50 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-sky-500/50"
-                        value={newUser.user_type}
-                        onChange={(e) => setNewUser({ ...newUser, user_type: e.target.value })}
-                      >
-                        <option value="USER">Standard User</option>
-                        <option value="ADMIN">System Admin</option>
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Network Assignment</label>
-                      <select
-                        className="w-full bg-slate-950/50 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-sky-500/50"
-                        value={newUser.assigned_network}
-                        onChange={(e) => setNewUser({ ...newUser, assigned_network: e.target.value })}
-                      >
-                        <option value="">No Network</option>
-                        {networks.map(n => <option key={n.id} value={n.id}>{n.name}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full bg-sky-500 text-slate-950 py-4 rounded-xl font-bold text-sm hover:bg-sky-400 transition-all shadow-[0_0_20px_rgba(56,189,248,0.2)] mt-4"
-                  >
-                    Create and Provision
-                  </button>
-                </form>
-              </m.div>
-            </m.div>
-          )}
-        </AP>
-
-        <div className="glass-panel overflow-hidden border-slate-800">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-800/30 text-slate-400 text-xs uppercase tracking-wider">
-                <th className="px-6 py-4 font-semibold">User Profile</th>
-                <th className="px-6 py-4 font-semibold">Role</th>
-                <th className="px-6 py-4 font-semibold">Assigned Network</th>
-                <th className="px-6 py-4 font-semibold text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/50">
-              <AP mode="popLayout">
-                {Array.isArray(users) && users.filter(u =>
-                  String(u?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                  String(u?.email || '').toLowerCase().includes(searchTerm.toLowerCase())
-                ).map((u) => (
-                  <m.tr
-                    key={u.id}
-                    layout
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="group hover:bg-slate-800/20 transition-colors"
-                  >
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700">
-                          <User className="text-sky-400" size={18} />
-                        </div>
-                        <div>
-                          <p className="font-semibold text-sm">{u.name}</p>
-                          <p className="text-xs text-slate-500 font-mono">{u.email}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest ${u.user_type === 'ADMIN' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' :
-                        'bg-sky-500/10 text-sky-400 border border-sky-500/20'
-                        }`}>
-                        {u.user_type}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2 text-sm text-slate-300">
-                        <NetworkIcon size={14} className="text-slate-500" />
-                        {Array.isArray(networks) && networks.find(n => String(n?.id) === String(u?.assigned_network))?.name || 'None'}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <button
-                        onClick={() => handleDeleteUser(u.id)}
-                        className="p-2 hover:bg-rose-500/10 text-rose-400 rounded-lg transition-colors"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
-                  </m.tr>
-                ))}
-              </AP>
-            </tbody>
-          </table>
-        </div>
-      </m.div>
+            {/* Managed Devices Section */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-bold flex items-center gap-2">
+                <Shield size={20} className="text-sky-400" /> Managed Device List
+              </h3>
+              <div className="glass-panel overflow-hidden border-slate-800">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-800/30 text-slate-400 text-[10px] uppercase tracking-widest">
+                      <th className="px-6 py-3 font-bold">Node Status</th>
+                      <th className="px-6 py-3 font-bold">Network Address</th>
+                      <th className="px-6 py-3 font-bold">Telemetry</th>
+                      <th className="px-6 py-3 font-bold text-right">Security Controls</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/50">
+                    {managedDevices.map(d => (
+                      <tr key={d.id} className="group hover:bg-slate-800/20 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-lg ${d.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                              {getDeviceIcon(d.type)}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-slate-200">{d.name || 'Managed Node'}</p>
+                              <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-tighter ${d.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
+                                {d.status}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-xs font-mono text-slate-300">{d.ip_address}</p>
+                          <p className="text-[10px] text-slate-500">{d.network_name}</p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-4 text-[10px] font-bold text-slate-500 uppercase tracking-tighter">
+                            <span className="flex items-center gap-1"><Activity size={12} className="text-sky-400" /> {d.data_usage?.toFixed(1) || '0.0'} MB</span>
+                            <span className="flex items-center gap-1"><Clock size={12} className="text-amber-400" /> 100% Up</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          {d.status === 'ACTIVE' ? (
+                            <button 
+                              onClick={() => handleBlockDevice(d.id)}
+                              className="px-4 py-1.5 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-lg text-[10px] font-bold uppercase hover:bg-rose-500/20 transition-colors flex items-center gap-2 ml-auto"
+                            >
+                              <ShieldOff size={12} /> Block Access
+                            </button>
+                          ) : (
+                            <button 
+                              onClick={() => handleUnblockDevice(d.id)}
+                              className="px-4 py-1.5 bg-emerald-500 text-slate-950 rounded-lg text-[10px] font-bold uppercase hover:bg-emerald-400 transition-colors flex items-center gap-2 ml-auto"
+                            >
+                              <Shield size={12} /> Restore Link
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    {managedDevices.length === 0 && (
+                      <tr>
+                        <td colSpan="4" className="px-6 py-20 text-center text-slate-500 italic text-sm">No managed devices synchronized in current infrastructure.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     );
   }
 
@@ -360,11 +475,9 @@ const Devices = ({ userType }) => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {allDevices.length > 0 ? allDevices.map((d) => (
-          <m.div
+          <div
             key={d.id}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="glass-panel p-6 space-y-4 hover:border-sky-500/30 transition-all group"
+            className="glass-panel p-6 space-y-4 hover:border-sky-500/30 transition-all group hover:translate-y-[-5px]"
           >
             <div className="flex justify-between items-start">
               <div className="p-3 bg-slate-800 rounded-2xl group-hover:bg-sky-500/5 transition-colors">
@@ -393,7 +506,7 @@ const Devices = ({ userType }) => {
                 <Send size={12} /> Send Data
               </button>
             </div>
-          </m.div>
+          </div>
         )) : (
           <div className="col-span-full p-20 text-center glass-panel opacity-50">
             <Laptop size={48} className="mx-auto mb-4" />
@@ -403,20 +516,10 @@ const Devices = ({ userType }) => {
       </div>
 
       {/* SHARING MODAL (SHAREIT STYLE) */}
-      <AP>
+
         {isSharing && (
-          <m.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md"
-          >
-            <m.div
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              className="bg-[#0a0f1d] border border-slate-800 rounded-3xl p-8 w-full max-w-lg shadow-2xl relative"
-            >
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md">
+            <div className="bg-[#0a0f1d] border border-slate-800 rounded-3xl p-8 w-full max-w-lg shadow-2xl relative">
               <button
                 onClick={() => setIsSharing(false)}
                 className="absolute top-6 right-6 p-2 text-slate-500 hover:text-white transition-colors"
@@ -461,10 +564,10 @@ const Devices = ({ userType }) => {
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Choose Content Category</label>
                   <div className="grid grid-cols-4 gap-3">
                     {[
-                      { label: 'Photos', icon, color: 'text-pink-400' },
-                      { label: 'Videos', icon, color: 'text-purple-400' },
-                      { label: 'Files', icon, color: 'text-sky-400' },
-                      { label: 'System', icon, color: 'text-slate-400' }
+                      { label: 'Photos', icon: Image, color: 'text-pink-400' },
+                      { label: 'Videos', icon: Video, color: 'text-purple-400' },
+                      { label: 'Files', icon: File, color: 'text-sky-400' },
+                      { label: 'System', icon: Activity, color: 'text-slate-400' }
                     ].map((type) => (
                       <button
                         key={type.label}
@@ -490,10 +593,10 @@ const Devices = ({ userType }) => {
                   {isSending ? 'Initiating Secure Tunnel...' : `Transmit Selected ${selectedFileType}`}
                 </button>
               </div>
-            </m.div>
-          </m.div>
+            </div>
+          </div>
         )}
-      </AP>
+
     </div>
   );
 };

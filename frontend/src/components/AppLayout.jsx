@@ -1,33 +1,33 @@
 import React from "react";
-import {NavLink, useLocation, useNavigate} from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Monitor, ArrowLeftRight, Shield, Lock, Network, FileText, Settings,
-  Bell, Search, Moon, ChevronDown, CheckCircle2, Wifi, HardDrive, Activity, X, LogOut, Download, FileCheck
+  Bell, Search, Moon, ChevronDown, CheckCircle2, Wifi, HardDrive, Activity, X, LogOut, Download, FileCheck, Flame
 } from "lucide-react";
-import {useNetwork} from "@/context/NetworkContext";
-import {motion, AnimatePresence} from "framer-motion";
+import { useNetwork } from "../context/NetworkContext";
 
-const AppLayout = ({ user, onLogout }) => {
+
+const AppLayout = ({ user, onLogout, children }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { 
-    activeConnections, 
-    blockedToday, 
-    uptime, 
-    firewallOn, 
+  const {
+    activeConnections,
+    blockedToday,
+    uptime,
+    firewallOn,
     devices,
     vpnConnected,
-    vpnIP 
+    vpnIP
   } = useNetwork();
 
   const navItems = [
-    { to: "/", icon, label: "Dashboard" },
-    { to: "/devices", icon, label: "Devices" },
-    { to: "/received", icon, label: "Received Data" },
-    { to: "/data-transfer", icon, label: "Data Transfer" },
-    { to: "/firewall", icon, label: "Firewall", adminOnly: true },
-    { to: "/topology", icon, label: "Topology", adminOnly: true },
-    { to: "/vpn", icon, label: "Secure VPN" },
+    { to: "/", icon: LayoutDashboard, label: "Dashboard" },
+    { to: "/devices", icon: Monitor, label: "Devices" },
+    { to: "/received", icon: Download, label: "Received Data" },
+    { to: "/data-transfer", icon: ArrowLeftRight, label: "Data Transfer" },
+    { to: "/firewall", icon: Shield, label: "Firewall", adminOnly: true },
+    { to: "/topology", icon: Network, label: "Topology", adminOnly: true },
+    { to: "/vpn", icon: Lock, label: "Secure VPN" },
   ];
 
   return (
@@ -55,10 +55,8 @@ const AppLayout = ({ user, onLogout }) => {
                     <item.icon className={`h-5 w-5 transition-colors ${isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'}`} />
                     <span className="relative z-10">{item.label}</span>
                     {isActive && (
-                      <motion.div 
-                        layoutId="activeTab"
+                      <div
                         className="absolute left-0 w-1 h-6 bg-primary rounded-r-full"
-                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
                       />
                     )}
                   </>
@@ -88,8 +86,9 @@ const AppLayout = ({ user, onLogout }) => {
             onClick={() => {
               localStorage.removeItem('isAuthenticated');
               localStorage.removeItem('userType');
+              localStorage.removeItem('access_token');
               onLogout();
-              window.location.href = '/login';
+              navigate('/login');
             }}
             className="w-full mt-2 flex items-center gap-3 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
           >
@@ -105,9 +104,9 @@ const AppLayout = ({ user, onLogout }) => {
           <div className="flex items-center gap-6">
             <div className="relative group">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-              <input 
-                type="text" 
-                placeholder="Search network nodes..." 
+              <input
+                type="text"
+                placeholder="Search network nodes..."
                 className="bg-muted/50 border border-transparent focus:border-primary/50 rounded-full py-1.5 pl-10 pr-4 text-xs w-64 transition-all outline-none"
               />
             </div>
@@ -135,7 +134,7 @@ const AppLayout = ({ user, onLogout }) => {
               </div>
               <ChevronDown className="h-3 w-3 text-muted-foreground group-hover:text-foreground transition-colors" />
             </div>
-            
+
             <div className="flex flex-col items-end border-l border-border pl-3">
               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none mb-1">Effective IP</p>
               <p className={`text-xs font-mono leading-none ${vpnConnected ? 'text-sky-400' : 'text-emerald-400'}`}>
@@ -146,15 +145,9 @@ const AppLayout = ({ user, onLogout }) => {
         </header>
 
         <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-          <m.div 
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-          >
-            {/* Component children placeholder if needed, but here we use Outlet or pass children */}
-            {React.Children.map(window.location.pathname, () => null)} 
-            {/* In a real scenario with Routes outside, this component wraps around them via Outlet */}
-          </m.div>
+          <div className="animate-fade-in">
+            {children}
+          </div>
         </div>
       </main>
     </div>

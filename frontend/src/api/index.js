@@ -3,7 +3,7 @@ import axios from 'axios';
 const API_URL = 'http://localhost:8000/api';
 
 const api = axios.create({
-    baseURL,
+    baseURL: API_URL,
     headers: {
         'Content-Type': 'application/json',
     },
@@ -13,14 +13,14 @@ const api = axios.create({
 api.interceptors.request.use((config) => {
     const token = localStorage.getItem('access_token');
     if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
+        config.headers.Authorization = `Token ${token}`; // Changed from Bearer to Token for DRF
     }
     return config;
 });
 
 export const authApi = {
-    login: (data) => api.post('/auth/login/', data),
-    signup: (data) => api.post('/users/signup/', data),
+    login: (data) => api.post('/login/', data),
+    signup: (data) => api.post('/signup/', data),
 };
 
 export const usersApi = {
@@ -28,18 +28,24 @@ export const usersApi = {
 };
 
 export const adminUsersApi = {
-    list: () => api.get('/users/admin_users/'),
-    create: (data) => api.post('/users/admin_users/', data),
-    delete: (id) => api.delete(`/users/admin_users/${id}/`),
+    list: () => api.get('/admin_users/'),
+    create: (data) => api.post('/admin_users/', data),
+    delete: (id) => api.delete(`/admin_users/${id}/`),
 };
 
 export const networksApi = {
     list: () => api.get('/networks/'),
-    create: (data) => api.post('/networks/', data),
+    create: (data) => api.post('/networks/'),
+    globalStats: () => api.get('/networks/global_stats/'),
+    myStats: () => api.get('/networks/my_network_stats/'),
 };
 
 export const devicesApi = {
     list: () => api.get('/devices/'),
+    block: (id) => api.post(`/devices/${id}/block/`),
+    unblock: (id) => api.post(`/devices/${id}/unblock/`),
+    approve: (id) => api.post(`/devices/${id}/approve/`),
+    deny: (id) => api.post(`/devices/${id}/deny/`),
 };
 
 export const transfersApi = {
@@ -48,14 +54,24 @@ export const transfersApi = {
 };
 
 export const firewallApi = {
-    logs: () => api.get('/firewall/logs/'),
-    toggle: () => api.post('/firewall/toggle/'),
+    logs: () => api.get('/firewall-logs/'),
+    rules: () => api.get('/firewall-rules/'),
+    createRule: (data) => api.post('/firewall-rules/', data),
+    deleteRule: (id) => api.delete(`/firewall-rules/${id}/`),
+    toggleRule: (id) => api.post(`/firewall-rules/${id}/toggle/`),
+    toggle: (data) => api.post('/networks/toggle_firewall/', data),
 };
 
 export const vpnApi = {
-    list: () => api.get('/vpn/servers/'),
-    connect: (data) => api.post('/vpn/connect/', data),
-    disconnect: () => api.post('/vpn/disconnect/'),
+    list: () => api.get('/vpn-servers/'),
+    status: () => api.get('/vpn-status/status/'),
+    connect: (data) => api.post('/vpn-status/connect/', data),
+    disconnect: () => api.post('/vpn-status/disconnect/'),
+};
+
+export const attacksApi = {
+    list: () => api.get('/attack-simulations/'),
+    trigger: (data) => api.post('/attack-simulations/trigger/', data),
 };
 
 export default api;

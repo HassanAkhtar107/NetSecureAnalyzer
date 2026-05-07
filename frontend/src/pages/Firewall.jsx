@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {motion as m, AnimatePresence} from 'framer-motion';
+
 import {
   Shield, ShieldOff, AlertTriangle, Activity, Lock, Globe, 
   Search, Filter, ChevronDown, CheckCircle2, XCircle, Clock, 
@@ -128,10 +128,8 @@ const Firewall = () => {
                   </thead>
                   <tbody className="divide-y divide-slate-800/50">
                      {logs.filter(l => l.source_ip.includes(searchTerm)).map((log, idx) => (
-                        <m.tr 
+                        <tr 
                           key={idx}
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
                           className="group hover:bg-slate-800/20"
                         >
                            <td className="px-4 py-4 text-[10px] font-mono text-slate-500">
@@ -154,7 +152,7 @@ const Firewall = () => {
                                  <span className="text-[10px] font-bold uppercase">{log.action === 'BLOCK' ? 'Dropped' : 'Forwarded'}</span>
                               </div>
                            </td>
-                        </m.tr>
+                        </tr>
                      ))}
                   </tbody>
                </table>

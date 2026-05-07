@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {BrowserRouter, Routes, Route, Navigate} from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import AppLayout from './components/AppLayout';
 import Dashboard from './pages/Dashboard';
 import Devices from './pages/Devices';
@@ -10,13 +10,13 @@ import VPN from './pages/VPN';
 import Received from './pages/Received';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
-import {NetworkProvider} from './context/NetworkContext';
+import { NetworkProvider } from './context/NetworkContext';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     return localStorage.getItem('isAuthenticated') === 'true';
   });
-  
+
   const [userType, setUserType] = useState(() => {
     return localStorage.getItem('userType') || 'USER';
   });
@@ -59,13 +59,13 @@ function App() {
     <NetworkProvider>
       <Router>
         <Routes>
-          <Route 
-            path="/login" 
-            element={!isAuthenticated ? <Login onLogin={handleLogin} /> : <Navigate to="/" />} 
+          <Route
+            path="/login"
+            element={!isAuthenticated ? <Login onLogin={handleLogin} /> : <Navigate to="/" />}
           />
-          <Route 
-            path="/signup" 
-            element={!isAuthenticated ? <Signup /> : <Navigate to="/" />} 
+          <Route
+            path="/signup"
+            element={!isAuthenticated ? <Signup /> : <Navigate to="/" />}
           />
           <Route
             path="/*"
@@ -78,14 +78,14 @@ function App() {
                     <Route path="/received" element={<Received />} />
                     <Route path="/data-transfer" element={<Transfers userType={userType} />} />
                     <Route path="/vpn" element={<VPN />} />
-                    
+
                     {userType === 'ADMIN' && (
                       <>
                         <Route path="/firewall" element={<Firewall />} />
                         <Route path="/topology" element={<Topology />} />
                       </>
                     )}
-                    
+
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </AppLayout>

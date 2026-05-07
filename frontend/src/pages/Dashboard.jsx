@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {motion as m, AnimatePresence} from 'framer-motion';
+
 import {
   Activity, Shield, ShieldOff, Server, Globe, Zap, AlertTriangle, 
   ArrowUpRight, ArrowDownLeft, Lock, Info, ExternalLink, 
@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import {AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell} from 'recharts';
 import {useNavigate} from 'react-router-dom';
-import {useNetwork} from '@/context/NetworkContext';
+import {useNetwork} from '../context/NetworkContext';
 import {networksApi, devicesApi, firewallApi} from '../api';
 
 const Dashboard = ({ userType }) => {
@@ -39,10 +39,9 @@ const Dashboard = ({ userType }) => {
   }, []);
 
   // Stats Card Component
-  const StatCard = ({ icon, label, value, trend, color }) => (
-    <m.div 
-      whileHover={{ y: -5 }}
-      className="glass-panel p-6 relative overflow-hidden group border-slate-800"
+  const StatCard = ({ icon: Icon, label, value, trend, color }) => (
+    <div 
+      className="glass-panel p-6 relative overflow-hidden group border-slate-800 hover:translate-y-[-5px] transition-transform"
     >
       <div className={`absolute top-0 right-0 w-24 h-24 bg-${color}-500/5 blur-3xl -mr-12 -mt-12 group-hover:bg-${color}-500/10 transition-colors`}></div>
       <div className="flex justify-between items-start mb-4">
@@ -59,7 +58,7 @@ const Dashboard = ({ userType }) => {
         <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-1">{label}</p>
         <h3 className="text-2xl font-bold text-white tracking-tight">{value}</h3>
       </div>
-    </m.div>
+    </div>
   );
 
   return (

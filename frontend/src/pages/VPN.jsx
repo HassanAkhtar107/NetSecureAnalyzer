@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import {motion as m} from 'framer-motion';
+
 import {Shield, Globe, Lock, Activity, Zap, Server, ChevronRight, CheckCircle2, AlertTriangle, Loader2} from 'lucide-react';
 import {vpnApi} from '../api';
-import {useNetwork} from '@/context/NetworkContext';
+import {useNetwork} from '../context/NetworkContext';
 import {toast} from 'sonner';
 
 const VPN = () => {
   const [servers, setServers] = useState([]);
   const [selectedServer, setSelectedServer] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [selectedProtocol, setSelectedProtocol] = useState('WireGuard');
+  const [baselineMetrics, setBaselineMetrics] = useState({ latency: 12, throughput: 940 });
   const { vpnConnected, setVpnConnected, vpnIP, setVpnIP } = useNetwork();
 
   const fetchServers = async () => {
@@ -48,18 +50,33 @@ const VPN = () => {
     setSelectedServer(server);
     setIsConnecting(true);
     try {
-      const res = await vpnApi.connect({ server_id: server.id });
+      const res = await vpnApi.connect({ server_id: server.id, protocol: selectedProtocol });
       setTimeout(() => {
         setVpnConnected(true);
         setVpnIP(res.data.simulated_ip);
         setIsConnecting(false);
-        toast.success(`Secure connection established to ${server.country}`);
+        toast.success(`Secure ${selectedProtocol} tunnel established to ${server.country}`);
       }, 2000);
     } catch (err) {
       toast.error("Handshake timed out");
       setIsConnecting(false);
     }
   };
+
+  const getImpactMetrics = () => {
+    const overhead = {
+      'WireGuard': { latency: 8, throughput: 0.95 },
+      'OpenVPN': { latency: 25, throughput: 0.85 },
+      'IPSec': { latency: 15, throughput: 0.90 }
+    }[selectedProtocol];
+
+    return {
+      latency: (selectedServer?.latency || 40) + overhead.latency,
+      throughput: Math.floor(baselineMetrics.throughput * overhead.throughput)
+    };
+  };
+
+  const currentMetrics = vpnConnected ? getImpactMetrics() : baselineMetrics;
 
   return (
     <div className="space-y-8 pb-10">
@@ -115,20 +132,41 @@ const VPN = () => {
               </div>
 
               <div className="space-y-4">
-                 <div className="flex justify-between items-center p-4 bg-slate-900/50 rounded-2xl border border-slate-800">
-                    <div className="flex items-center gap-3">
-                       <Zap size={16} className="text-amber-400" />
-                       <span className="text-xs font-medium text-slate-300">Network Latency</span>
+                  <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Performance Delta</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-[9px] text-slate-500 uppercase">Baseline</p>
+                        <div className="flex flex-col gap-1 mt-1">
+                          <span className="text-xs font-mono text-slate-300">{baselineMetrics.latency}ms / {baselineMetrics.throughput}Mbps</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[9px] text-emerald-500 uppercase">After VPN</p>
+                        <div className="flex flex-col gap-1 mt-1">
+                          <span className={`text-xs font-mono ${vpnConnected ? 'text-white' : 'text-slate-600'}`}>
+                            {vpnConnected ? `${currentMetrics.latency}ms / ${currentMetrics.throughput}Mbps` : '--'}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <span className="text-xs font-mono text-white">{vpnConnected ? '24ms' : '--'}</span>
-                 </div>
-                 <div className="flex justify-between items-center p-4 bg-slate-900/50 rounded-2xl border border-slate-800">
-                    <div className="flex items-center gap-3">
-                       <Activity size={16} className="text-primary" />
-                       <span className="text-xs font-medium text-slate-300">Throughput</span>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tunneling Protocol</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {['WireGuard', 'OpenVPN', 'IPSec'].map(p => (
+                        <button
+                          key={p}
+                          disabled={vpnConnected || isConnecting}
+                          onClick={() => setSelectedProtocol(p)}
+                          className={`py-2 rounded-lg text-[10px] font-bold border transition-all ${selectedProtocol === p ? 'bg-sky-500/10 border-sky-500/50 text-sky-400' : 'bg-slate-900 border-slate-800 text-slate-500 hover:text-slate-400'}`}
+                        >
+                          {p}
+                        </button>
+                      ))}
                     </div>
-                    <span className="text-xs font-mono text-white">{vpnConnected ? '850 Mbps' : '--'}</span>
-                 </div>
+                  </div>
               </div>
 
               {selectedServer && (
@@ -161,11 +199,10 @@ const VPN = () => {
 
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {servers.map((server) => (
-                 <m.div 
+                 <div 
                    key={server.id}
-                   whileHover={{ y: -2 }}
                    onClick={() => !isConnecting && !vpnConnected && setSelectedServer(server)}
-                   className={`p-5 rounded-2xl border transition-all cursor-pointer group flex items-center justify-between ${
+                   className={`p-5 rounded-2xl border transition-all cursor-pointer group flex items-center justify-between hover:translate-y-[-2px] ${
                      selectedServer?.id === server.id 
                      ? 'bg-sky-500/10 border-sky-500/30' 
                      : 'bg-slate-900/50 border-slate-800 hover:border-slate-700'
@@ -192,7 +229,7 @@ const VPN = () => {
                        </div>
                        <ChevronRight size={14} className="text-slate-600" />
                     </div>
-                 </m.div>
+                 </div>
               ))}
            </div>
 
