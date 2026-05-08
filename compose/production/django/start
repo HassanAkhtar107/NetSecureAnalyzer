@@ -9,4 +9,4 @@ python /app/manage.py collectstatic --noinput
 
 python /app/manage.py migrate
 
-gunicorn docugen.wsgi --workers 3 --timeout 600 --bind 0.0.0.0:8000
+gunicorn netsecure.wsgi --workers 3 --timeout 600 --bind 0.0.0.0:8000

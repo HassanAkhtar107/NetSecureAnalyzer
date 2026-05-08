@@ -11,6 +11,8 @@ import { useNavigate } from 'react-router-dom';
 import { useNetwork } from '../context/NetworkContext';
 import { networksApi, devicesApi, firewallApi, userDevicesApi } from '../api';
 
+import SecurityFlow from '../components/SecurityFlow';
+
 const StatCard = ({ label, value, unit, icon: Icon, data, color }) => {
   const colorMap = {
     blue: '#3b82f6',
@@ -61,6 +63,7 @@ const StatCard = ({ label, value, unit, icon: Icon, data, color }) => {
   );
 };
 
+
 const Dashboard = ({ userType }) => {
   const navigate = useNavigate();
   const { activeConnections, blockedToday, uptime, firewallOn } = useNetwork();
@@ -68,6 +71,7 @@ const Dashboard = ({ userType }) => {
   const [metrics, setMetrics] = useState([]);
   const [devices, setDevices] = useState([]);
   const [events, setEvents] = useState([]);
+  const [currentDevice, setCurrentDevice] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // Simulated metrics generator
@@ -86,8 +90,13 @@ const Dashboard = ({ userType }) => {
         const [dRes, eRes, udRes] = await Promise.all([
           devicesApi.list(),
           firewallApi.logs(),
-          userType === 'ADMIN' ? userDevicesApi.list() : Promise.resolve({ data: [] })
+          userDevicesApi.list()
         ]);
+
+        // Find current device for SecurityFlow
+        const fingerprint = localStorage.getItem('device_fingerprint');
+        const myDev = udRes.data.find(d => d.device_id === fingerprint);
+        setCurrentDevice(myDev);
 
         // Combine devices and user devices for the list
         const allDevs = [
@@ -96,7 +105,7 @@ const Dashboard = ({ userType }) => {
             id: `ud_${ud.id}`,
             name: ud.device_name || ud.user_email,
             ip: ud.ip_address,
-            status: ud.is_blocked ? 'Blocked' : 'Active',
+            status: ud.is_blocked ? 'Blocked' : (ud.vpn_status ? 'VPN Active' : 'Active'),
             type: 'Laptop' // Default icon
           })) : [])
         ];
@@ -114,6 +123,7 @@ const Dashboard = ({ userType }) => {
     };
 
     fetchData();
+    const poll = setInterval(fetchData, 10000);
 
     // Initial metrics
     setMetrics(Array.from({ length: 20 }, generateMetric));
@@ -123,7 +133,10 @@ const Dashboard = ({ userType }) => {
       setMetrics(prev => [...prev.slice(-19), generateMetric()]);
     }, 3000);
 
-    return () => clearInterval(interval);
+    return () => {
+        clearInterval(interval);
+        clearInterval(poll);
+    };
   }, [userType]);
 
   const latest = metrics[metrics.length - 1] || { download: 0, upload: 0, ping: 0, jitter: 0, packetLoss: 0 };
@@ -143,6 +156,18 @@ const Dashboard = ({ userType }) => {
             <Plus className="w-4 h-4" /> Add Device
           </button>
         </div>
+      </div>
+
+      {/* Security Flow Visualization */}
+      <div className="bg-[#16191f] border border-slate-800 rounded-2xl p-6 overflow-hidden">
+        <div className="flex items-center justify-between mb-2">
+            <h3 className="font-bold text-white flex items-center gap-2">
+                <Activity size={16} className="text-sky-500" />
+                Live Security Path
+            </h3>
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Real-time Monitoring</span>
+        </div>
+        <SecurityFlow deviceInfo={currentDevice} />
       </div>
 
       {/* Quick Stats Grid */}

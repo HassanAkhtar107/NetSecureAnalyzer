@@ -22,6 +22,7 @@ const AppLayout = ({ user, onLogout, children }) => {
 
   const navItems = [
     { to: "/", icon: LayoutDashboard, label: "Dashboard" },
+    { to: "/my-security", icon: ShieldCheck, label: "My Security" },
     { to: "/devices", icon: Monitor, label: "Devices", adminOnly: true },
     { to: "/received", icon: Download, label: "Received Data" },
     { to: "/data-transfer", icon: ArrowLeftRight, label: "Data Transfer" },
@@ -175,9 +176,9 @@ const AppLayout = ({ user, onLogout, children }) => {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-3 pl-2">
               <div className="flex flex-col items-end hidden sm:flex">
-                <span className="text-xs font-bold text-white leading-none mb-1">{user?.name || ''}</span>
+                <span className="text-xs font-bold text-white leading-none mb-2">{user?.name ? user?.name : user?.email || ''}</span>
                 <Badge variant="success" className="h-4 px-1.5 text-[9px] font-bold uppercase tracking-widest border-emerald-500/20">
-                  {user?.user_type === 'ADMIN' ? 'Admin Node' : 'Network User'}
+                  {user?.user_type === 'ADMIN' ? 'Admin' : 'User'}
                 </Badge>
               </div>
               <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-slate-800 to-slate-700 border border-slate-600 flex items-center justify-center text-slate-200 shadow-inner">

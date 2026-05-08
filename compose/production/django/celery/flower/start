@@ -5,7 +5,7 @@ set -o pipefail
 set -o nounset
 
 worker_ready() {
-    celery -A docugen inspect ping
+    celery -A netsecure inspect ping
 }
 
 until worker_ready; do
@@ -14,4 +14,4 @@ until worker_ready; do
 done
 >&2 echo 'Celery workers is available'
 
-celery -A docugen --broker="${REDIS_URL}" flower --basic_auth="${CELERY_FLOWER_USER}:${CELERY_FLOWER_PASSWORD}"
+celery -A netsecure --broker="${REDIS_URL}" flower --basic_auth="${CELERY_FLOWER_USER}:${CELERY_FLOWER_PASSWORD}"

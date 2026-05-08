@@ -4,4 +4,4 @@ set -o errexit
 set -o nounset
 
 rm -f './celerybeat.pid'
-celery -A docugen beat -l INFO
+celery -A netsecure beat -l INFO

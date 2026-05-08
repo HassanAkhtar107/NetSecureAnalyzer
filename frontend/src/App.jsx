@@ -6,11 +6,13 @@ import Devices from './pages/Devices';
 import Transfers from './pages/Transfers';
 import Firewall from './pages/Firewall';
 import Received from './pages/Received';
+import MySecurity from './pages/MySecurity';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import { NetworkProvider } from './context/NetworkContext';
 import useDeviceRegistration from './hooks/useDeviceRegistration';
 import BlockedModal from './components/BlockedModal';
+import { Toaster } from 'sonner';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
@@ -27,7 +29,6 @@ function App() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      // In a real app, you'd fetch the user profile here
       import('./api').then(({ usersApi }) => {
         usersApi.me().then(res => {
           setUser(res.data);
@@ -48,6 +49,8 @@ function App() {
     setUserType(role);
     localStorage.setItem('isAuthenticated', 'true');
     localStorage.setItem('userType', role);
+    // Trigger immediate re-check after login
+    reCheck();
   };
 
   const handleLogout = () => {
@@ -55,10 +58,13 @@ function App() {
     setUser(null);
     localStorage.removeItem('isAuthenticated');
     localStorage.removeItem('userType');
+    localStorage.removeItem('access_token');
   };
 
   return (
     <NetworkProvider>
+      <Toaster position="top-right" theme="dark" richColors />
+      
       {isBlocked && (
         <BlockedModal
           deviceInfo={deviceInfo}
@@ -66,6 +72,7 @@ function App() {
           onLogout={handleLogout}
         />
       )}
+      
       <Router>
         <Routes>
           <Route
@@ -84,6 +91,7 @@ function App() {
                   <Routes>
                     <Route path="/received" element={<Received />} />
                     <Route path="/data-transfer" element={<Transfers userType={userType} />} />
+                    <Route path="/my-security" element={<MySecurity />} />
                     <Route path="/" element={<Dashboard userType={userType} />} />
 
                     {userType === 'ADMIN' && (

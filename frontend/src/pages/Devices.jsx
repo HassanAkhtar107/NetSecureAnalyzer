@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Search, Plus, Ban, CheckCircle2, Trash2, MoreVertical, X, ArrowUpDown, Filter, 
-  Download, Upload, ShieldOff, Shield, Laptop, Smartphone, Cpu, Tv, HardDrive, 
+import {
+  Search, Plus, Ban, CheckCircle2, Trash2, MoreVertical, X, ArrowUpDown, Filter,
+  Download, Upload, ShieldOff, Shield, Laptop, Smartphone, Cpu, Tv, HardDrive,
   Activity, Globe, UserPlus, User, Network, Server, Info, Clock, AlertTriangle, Loader2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { adminUsersApi, networksApi, devicesApi, transfersApi, userDevicesApi } from '../api';
 import { toast } from 'sonner';
 import { formatDistanceToNow, isValid } from 'date-fns';
+import { cn } from '../lib/utils';
 import SummaryCard from '../components/SummaryCard';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -63,36 +64,49 @@ const Devices = ({ userType }) => {
   const [networks, setNetworks] = useState([]);
 
   const fetchData = async () => {
-    setLoading(true);
     try {
-      const [dRes, nRes] = await Promise.allSettled([
+      const [dRes, nRes, udRes] = await Promise.allSettled([
         devicesApi.list(),
-        networksApi.list()
+        networksApi.list(),
+        userDevicesApi.list()
       ]);
-      
-      const safeArr = (res) => (res.status === 'fulfilled' && Array.isArray(res.value?.data)) ? res.value.data : [];
-      let fetchedDevices = safeArr(dRes);
-      
-      // Add sample device for testing if none exist
-      if (fetchedDevices.length === 0) {
-        fetchedDevices = [{
-          id: 'mock-1',
-          name: 'Main Workstation',
-          type: 'laptop',
-          ip_address: '192.168.1.42',
-          status: 'ACTIVE',
-          is_approved: true,
-          network_name: 'Production vNet',
-          traffic_usage: 4.2,
-          last_active: new Date().toISOString()
-        }];
+
+      console.log("Devices Promise Status:", dRes.status);
+      console.log("Networks Promise Status:", nRes.status);
+      console.log("UserDevices Promise Status:", udRes.status);
+
+      if (udRes.status === 'rejected') {
+        console.error("UserDevices API Rejected:", udRes.reason);
       }
-      
-      setDevices(fetchedDevices);
+
+      const safeArr = (res) => {
+        if (res.status !== 'fulfilled' || !res.value?.data) return [];
+        return Array.isArray(res.value.data.results) ? res.value.data.results :
+          Array.isArray(res.value.data) ? res.value.data : [];
+      };
+      let fetchedDevices = safeArr(dRes);
+      let fetchedUserDevices = safeArr(udRes);
+
+      console.log("Infrastructure Devices Count:", fetchedDevices.length);
+      console.log("User Registered Devices Count:", fetchedUserDevices.length);
+
+      // Combine devices, marking user-registered ones
+      const combined = [
+        ...fetchedDevices.map(d => ({ ...d, source: 'infrastructure' })),
+        ...fetchedUserDevices.map(d => ({
+          ...d,
+          id: `ud-${d.id}`,
+          name: d.device_name || d.user_email || 'Unnamed Device',
+          status: d.is_blocked ? 'BLOCKED' : (d.vpn_status ? 'VPN ACTIVE' : 'ACTIVE'),
+          source: 'user_registration',
+          is_approved: !d.is_blocked
+        }))
+      ];
+
+      setDevices(combined);
       setNetworks(safeArr(nRes));
     } catch (err) {
       console.error("Fetch error:", err);
-      toast.error("Failed to sync infrastructure data");
     } finally {
       setLoading(false);
     }
@@ -100,13 +114,15 @@ const Devices = ({ userType }) => {
 
   useEffect(() => {
     fetchData();
+    const interval = setInterval(fetchData, 5000); // Polling every 5 seconds
+    return () => clearInterval(interval);
   }, [userType]);
 
   const counts = useMemo(() => {
     return {
       total: devices.length,
-      active: devices.filter(d => d.status === 'ACTIVE' || d.is_approved).length,
-      pending: devices.filter(d => !d.is_approved).length,
+      active: devices.filter(d => d.status === 'ACTIVE' || d.status === 'VPN ACTIVE').length,
+      pending: devices.filter(d => d.status === 'PENDING').length,
       blocked: devices.filter(d => d.status === 'BLOCKED').length
     };
   }, [devices]);
@@ -115,7 +131,7 @@ const Devices = ({ userType }) => {
     return devices.filter(d => {
       const q = query.toLowerCase();
       const matchesQuery = !q || (d.name?.toLowerCase().includes(q) || d.ip_address?.includes(q));
-      const matchesStatus = statusFilter === 'all' || 
+      const matchesStatus = statusFilter === 'all' ||
         (statusFilter === 'active' && (d.status === 'ACTIVE' || d.is_approved)) ||
         (statusFilter === 'pending' && !d.is_approved) ||
         (statusFilter === 'blocked' && d.status === 'BLOCKED');
@@ -132,26 +148,42 @@ const Devices = ({ userType }) => {
     } catch (err) { toast.error("Action failed"); }
   };
 
-  const handleBlock = async (id) => {
+  const handleBlock = async (device) => {
     try {
-      await devicesApi.block(id);
+      if (device.source === 'user_registration') {
+        const id = device.id.replace('ud-', '');
+        await userDevicesApi.block(id);
+      } else {
+        await devicesApi.block(device.id);
+      }
       toast.success("Access restricted");
       fetchData();
     } catch (err) { toast.error("Action failed"); }
   };
 
-  const handleUnblock = async (id) => {
+  const handleUnblock = async (device) => {
     try {
-      await devicesApi.unblock(id);
+      if (device.source === 'user_registration') {
+        const id = device.id.replace('ud-', '');
+        await userDevicesApi.unblock(id);
+      } else {
+        await devicesApi.unblock(device.id);
+      }
       toast.success("Access restored");
       fetchData();
     } catch (err) { toast.error("Action failed"); }
   };
 
-  const handleRemove = async (id) => {
+  const handleRemove = async (device) => {
     try {
-      await devicesApi.delete(id);
-      toast.success("Device removed from network");
+      if (device.source === 'user_registration') {
+        const id = device.id.replace('ud-', '');
+        await userDevicesApi.delete(id);
+        toast.success("External device record removed");
+      } else {
+        await devicesApi.delete(device.id);
+        toast.success("Infrastructure node removed");
+      }
       fetchData();
     } catch (err) { toast.error("Removal failed"); }
   };
@@ -200,7 +232,7 @@ const Devices = ({ userType }) => {
         <div className="p-4 border-b border-slate-800 flex flex-col md:flex-row gap-4 items-center">
           <div className="relative flex-1 w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-            <Input 
+            <Input
               placeholder="Search by name, IP, or MAC..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -241,6 +273,7 @@ const Devices = ({ userType }) => {
             <thead>
               <tr className="bg-[#0d1117]/50 text-slate-500 text-[10px] font-bold uppercase tracking-widest border-b border-slate-800">
                 <th className="px-6 py-3">Device</th>
+                <th className="px-6 py-3">email</th>
                 <th className="px-6 py-3">Address</th>
                 <th className="px-6 py-3">Status</th>
                 <th className="px-6 py-3 text-right">Throughput</th>
@@ -250,8 +283,8 @@ const Devices = ({ userType }) => {
             </thead>
             <tbody className="divide-y divide-slate-800">
               {filteredDevices.map(d => (
-                <tr 
-                  key={d.id} 
+                <tr
+                  key={d.id}
                   onClick={() => setSelectedDevice(d)}
                   className="cursor-pointer hover:bg-slate-800/20 transition-colors group"
                 >
@@ -267,15 +300,29 @@ const Devices = ({ userType }) => {
                     </div>
                   </td>
                   <td className="px-6 py-4">
+                    <p className="text-xs font-mono text-slate-400">{d.user_email || 'Unknown'}</p>
+                  </td>
+                  <td className="px-6 py-4">
                     <p className="text-xs font-mono text-slate-400">{d.ip_address}</p>
                   </td>
                   <td className="px-6 py-4">
-                    <Badge variant={d.status === 'BLOCKED' ? 'destructive' : d.is_approved ? 'success' : 'warning'}>
-                      <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${
-                        d.status === 'BLOCKED' ? 'bg-rose-500' : d.is_approved ? 'bg-emerald-500' : 'bg-amber-500'
-                      }`} />
-                      {d.status === 'BLOCKED' ? 'Blocked' : d.is_approved ? 'Active' : 'Pending'}
+                    <Badge
+                      className={cn(
+                        "font-bold uppercase tracking-tighter",
+                        d.status === 'BLOCKED' ? "bg-rose-500/10 text-rose-500 border-rose-500/20" :
+                          d.status === 'VPN ACTIVE' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
+                            "bg-sky-500/10 text-sky-400 border-sky-500/20"
+                      )}
+                    >
+                      <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${d.status === 'BLOCKED' ? 'bg-rose-500' :
+                        d.status === 'VPN ACTIVE' ? 'bg-emerald-400 animate-pulse' :
+                          'bg-sky-500'
+                        }`} />
+                      {d.status}
                     </Badge>
+                    {d.source === 'user_registration' && (
+                      <Badge variant="outline" className="ml-2 text-[8px] border-slate-700 text-slate-500">External</Badge>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <p className="text-xs font-bold text-slate-300">{(d.traffic_usage || 0).toFixed(1)} Mbps</p>
@@ -297,16 +344,16 @@ const Devices = ({ userType }) => {
                           </DropdownMenuItem>
                         )}
                         {d.status !== 'BLOCKED' ? (
-                          <DropdownMenuItem onClick={() => handleBlock(d.id)}>
+                          <DropdownMenuItem onClick={() => handleBlock(d)}>
                             <ShieldOff className="mr-2 h-4 w-4 text-rose-500" /> Block Access
                           </DropdownMenuItem>
                         ) : (
-                          <DropdownMenuItem onClick={() => handleUnblock(d.id)}>
+                          <DropdownMenuItem onClick={() => handleUnblock(d)}>
                             <Shield className="mr-2 h-4 w-4 text-emerald-500" /> Unblock Access
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => handleRemove(d.id)} className="text-rose-500 focus:text-rose-400">
+                        <DropdownMenuItem onClick={() => handleRemove(d)} className="text-rose-500 focus:text-rose-400">
                           <Trash2 className="mr-2 h-4 w-4" /> Remove Device
                         </DropdownMenuItem>
                       </DropdownMenuContent>

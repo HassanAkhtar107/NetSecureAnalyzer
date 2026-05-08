@@ -5,4 +5,4 @@ set -o pipefail
 set -o nounset
 
 
-celery -A docugen worker -l INFO
+celery -A netsecure worker -l INFO

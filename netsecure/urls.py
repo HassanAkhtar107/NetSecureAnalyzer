@@ -1,4 +1,4 @@
-"""docugen URL Configuration
+"""netsecure URL Configuration
 
 The `urlpatterns` list routes URLs to views. For more information please see:
     https://docs.djangoproject.com/en/2.2/topics/http/urls/
@@ -42,7 +42,7 @@ except admin.sites.NotRegistered:
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("api/", include("docugen.api_router")),
+    path("api/", include("netsecure.api_router")),
 ]
 
 # urlpatterns.append(path("api/improve-text/", improve_text_view, name="improve-text"))

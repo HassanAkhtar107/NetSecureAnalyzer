@@ -53,6 +53,7 @@ export const userDevicesApi = {
     register: (data) => api.post('/user-devices/register/', data),
     block: (id) => api.post(`/user-devices/${id}/block/`),
     unblock: (id) => api.post(`/user-devices/${id}/unblock/`),
+    delete: (id) => api.delete(`/user-devices/${id}/`),
 };
 
 export const transfersApi = {

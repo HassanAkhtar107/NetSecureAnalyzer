@@ -15,10 +15,9 @@ export const NetworkProvider = ({ children }) => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [devRes, fireRes, vpnRes] = await Promise.allSettled([
+        const [devRes, vpnRes] = await Promise.allSettled([
           devicesApi.list(),
-          firewallApi.toggle(), // Using toggle just to get status if needed, or we assume true
-          vpnApi.list() // To check VPN status if we had an endpoint for it
+          vpnApi.status()
         ]);
 
         if (devRes.status === 'fulfilled' && Array.isArray(devRes.value.data)) {
@@ -30,6 +29,11 @@ export const NetworkProvider = ({ children }) => {
           }));
           setDevices(deviceList);
           setActiveConnections(deviceList.length + 5);
+        }
+
+        if (vpnRes.status === 'fulfilled' && vpnRes.value.data) {
+            setVpnConnected(vpnRes.value.data.is_active);
+            setVpnIP(vpnRes.value.data.simulated_ip || '0.0.0.0');
         }
 
         setBlockedToday(Math.floor(Math.random() * 20));
