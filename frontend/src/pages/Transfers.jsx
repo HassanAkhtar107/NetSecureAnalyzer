@@ -1,259 +1,412 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  ArrowLeftRight, Upload as UploadIcon, Download as DownloadIcon,
+  FileText, Image as ImageIcon, Video, Archive, Pause, Play, X,
+  Plus, Search, CheckCircle2, AlertCircle, Zap, Server, Activity, MoreVertical, Trash2
+} from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../components/ui/dropdown-menu';
+import { devicesApi, transfersApi } from '../api';
+import { toast } from 'sonner';
+import { formatDistanceToNow, isValid } from 'date-fns';
+import { Card } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Badge } from '../components/ui/badge';
+import { Progress } from '../components/ui/progress';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow
+} from '../components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 
-import {Send, Server, Activity, Zap, Clock, ShieldCheck, AlertCircle} from 'lucide-react';
-import {devicesApi, transfersApi} from '../api';
-import {toast} from 'sonner';
+const fileIcon = {
+  doc: FileText,
+  image: ImageIcon,
+  video: Video,
+  archive: Archive,
+  data: Activity
+};
 
 const Transfers = ({ userType }) => {
   const [devices, setDevices] = useState([]);
   const [transfers, setTransfers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState('');
+  const [tab, setTab] = useState('all');
+
+  // Configuration State
   const [selectedSource, setSelectedSource] = useState('');
   const [selectedDest, setSelectedDest] = useState('');
+  const [selectedFileType, setSelectedFileType] = useState('doc');
+  const [showNewModal, setShowNewModal] = useState(false);
   const [isTransferring, setIsTransferring] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [metrics, setMetrics] = useState({ bandwidth: 0, latency: 0, throughput: 0, ping: 0, packetLoss: 0, eta: '0s' });
-  const [activeTransfer, setActiveTransfer] = useState(null);
+
+  const fetchData = async () => {
+    try {
+      const [devRes, transRes] = await Promise.all([
+        devicesApi.list(),
+        transfersApi.list()
+      ]);
+
+      const fetchedDevices = Array.isArray(devRes.data) ? devRes.data : [];
+      setDevices(fetchedDevices);
+
+      let fetchedTransfers = Array.isArray(transRes.data) ? transRes.data : [];
+      if (fetchedTransfers.length === 0) {
+        fetchedTransfers = [
+          { id: 't1', name: 'Q4-financials.pdf', kind: 'doc', direction: 'upload', peer: '192.168.1.42', sizeMb: 12.4, progress: 78, speedMbps: 8.2, status: 'active', startedAt: Date.now() - 60000 },
+          { id: 't2', name: 'campaign-hero.mp4', kind: 'video', direction: 'download', peer: 'cdn-edge-3', sizeMb: 245.7, progress: 34, speedMbps: 45.6, status: 'active', startedAt: Date.now() - 90000 },
+          { id: 't3', name: 'design-assets.zip', kind: 'archive', direction: 'download', peer: '10.0.0.18', sizeMb: 88.2, progress: 100, speedMbps: 0, status: 'completed', startedAt: Date.now() - 600000 }
+        ];
+      } else {
+        // Map backend data to UI format
+        fetchedTransfers = fetchedTransfers.map(t => ({
+          id: t.id,
+          name: t.file_name || 'unknown_stream',
+          kind: t.file_type || 'data',
+          direction: t.receiver_ip === '127.0.0.1' ? 'download' : 'upload', // Simplified logic
+          peer: t.receiver_ip || t.sender_ip,
+          sizeMb: t.size_mb || 4.2,
+          progress: t.status === 'COMPLETED' ? 100 : 45,
+          speedMbps: t.bandwidth || 0,
+          status: t.status?.toLowerCase() === 'completed' ? 'completed' : 'active',
+          startedAt: new Date(t.timestamp).getTime()
+        }));
+      }
+      setTransfers(fetchedTransfers);
+    } catch (err) {
+      console.error("Fetch error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const devRes = await devicesApi.list();
-        if (Array.isArray(devRes.data)) {
-          setDevices(devRes.data);
-          if (devRes.data.length > 0) {
-            if (!selectedSource) setSelectedSource(String(devRes.data[0].id));
-            if (devRes.data.length > 1 && !selectedDest) setSelectedDest(String(devRes.data[1].id));
-          }
-        }
-
-        const transRes = await transfersApi.list();
-        setTransfers(transRes.data);
-      } catch (err) {
-        console.error("Failed to fetch transfer data", err);
-      }
-    };
     fetchData();
-    const interval = setInterval(fetchData, 5000);
+    const interval = setInterval(fetchData, 8000);
     return () => clearInterval(interval);
   }, []);
 
-  const startTransfer = async () => {
-    if (!selectedSource || !selectedDest) return;
-    
-    // Firewall Check
-    const destDevice = devices.find(d => String(d.id) === String(selectedDest));
-    if (destDevice?.status === 'BLOCKED') {
-      toast.error("Firewall Policy Violation: Destination node is blacklisted.");
+  const stats = useMemo(() => {
+    const active = transfers.filter(t => t.status === 'active');
+    return {
+      active: active.length,
+      throughput: active.reduce((acc, t) => acc + (t.speedMbps || 0), 0).toFixed(1),
+      uploaded: transfers.filter(t => t.direction === 'upload' && t.status === 'completed').reduce((acc, t) => acc + (t.sizeMb || 0), 0).toFixed(1),
+      downloaded: transfers.filter(t => t.direction === 'download' && t.status === 'completed').reduce((acc, t) => acc + (t.sizeMb || 0), 0).toFixed(1),
+    };
+  }, [transfers]);
+
+  const filtered = useMemo(() => {
+    return transfers.filter(t => {
+      const matchesTab = tab === 'all' || t.status === tab;
+      const matchesQuery = !query || t.name.toLowerCase().includes(query.toLowerCase()) || t.peer.includes(query);
+      return matchesTab && matchesQuery;
+    });
+  }, [transfers, tab, query]);
+
+  const handleStartTransfer = async (e) => {
+    if (e) e.preventDefault();
+    if (!selectedSource || !selectedDest) {
+      toast.error("Source and Destination nodes must be defined");
       return;
     }
 
     setIsTransferring(true);
-    setProgress(0);
-    
     try {
-      const res = await transfersApi.create({
+      await transfersApi.create({
         sender_device: selectedSource,
         receiver_device: selectedDest,
-        bandwidth: 50.0 + Math.random() * 50,
-        latency: 10 + Math.random() * 20,
-        throughput: 40 + Math.random() * 30,
-        packet_loss: Math.random() * 0.5,
+        file_name: `transfer_${Math.floor(Math.random() * 1000)}.${selectedFileType}`,
+        file_type: selectedFileType,
         simulate: true
       });
-      setActiveTransfer(res.data);
-
-      const timer = setInterval(() => {
-        setProgress(prev => {
-          if (prev >= 100) {
-            clearInterval(timer);
-            setIsTransferring(false);
-            toast.success("Packet transfer sequence completed successfully");
-            return 100;
-          }
-          
-          // Live Telemetry Simulation (Updates every 100ms internally, fulfilling the 500ms requirement)
-          setMetrics({
-            bandwidth: (80 + Math.random() * 40).toFixed(1),
-            latency: (15 + Math.random() * 10).toFixed(1),
-            throughput: (75 + Math.random() * 15).toFixed(1),
-            ping: (10 + Math.random() * 5).toFixed(0),
-            packetLoss: (Math.random() * 0.1).toFixed(2),
-            eta: `${Math.ceil((100 - prev) / 10)}s`
-          });
-
-          return prev + 2;
-        });
-      }, 200);
+      toast.success("New transfer sequence initiated");
+      setShowNewModal(false);
+      fetchData();
     } catch (err) {
-      toast.error(err.response?.data?.error || "Transfer protocol handshake failed");
+      toast.error("Handshake failed");
+    } finally {
       setIsTransferring(false);
     }
   };
 
+  const handleDelete = async (id) => {
+    try {
+      await transfersApi.delete(id);
+      toast.success("Transfer record deleted");
+      fetchData();
+    } catch (err) {
+      toast.error("Failed to delete record");
+    }
+  };
+
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
-      <div className="flex justify-between items-center">
+    <div className="space-y-6 animate-in fade-in duration-500">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold flex items-center gap-3 tracking-tight">
-            <Send className="text-primary" size={28} />
-            Data Transfer Protocol
-          </h2>
-          <p className="text-slate-500 text-sm mt-1">Initiate and monitor high-speed bitstream transfers between network nodes.</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-white">Data Transfer</h1>
+          <p className="text-sm text-slate-500">Peer-to-peer file transfers with live telemetry.</p>
         </div>
+        <Button className="gap-2 shadow-glow" onClick={() => setShowNewModal(true)}>
+          <Plus className="h-4 w-4" /> New Transfer
+        </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="glass-panel p-8 space-y-6 lg:col-span-1">
-          <h3 className="text-lg font-bold flex items-center gap-2">
-            <Zap className="text-amber-400" size={18} /> Configuration
-          </h3>
-          
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Source Node</label>
-              <select 
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-primary/50 outline-none"
-                value={selectedSource}
-                onChange={(e) => setSelectedSource(e.target.value)}
-              >
-                {devices.map(d => <option key={d.id} value={d.id}>{d.name || d.ip_address} ({d.ip_address})</option>)}
-              </select>
-            </div>
+      {/* Stats Grid */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Stat label="Active" value={stats.active} icon={ArrowLeftRight} tone="primary" />
+        <Stat label="Throughput" value={`${stats.throughput} Mbps`} icon={Activity} tone="success" />
+        <Stat label="Uploaded today" value={`${stats.uploaded} MB`} icon={UploadIcon} tone="warning" />
+        <Stat label="Downloaded today" value={`${stats.downloaded} MB`} icon={DownloadIcon} tone="primary" />
+      </div>
 
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Destination Node</label>
-              <select 
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-primary/50 outline-none"
-                value={selectedDest}
-                onChange={(e) => setSelectedDest(e.target.value)}
-              >
-                {devices.map(d => <option key={d.id} value={d.id}>{d.name || d.ip_address} ({d.ip_address})</option>)}
-              </select>
-            </div>
-
-            <div className="pt-4">
-              <button 
-                onClick={startTransfer}
-                disabled={isTransferring || !selectedSource || !selectedDest}
-                className="w-full bg-primary text-slate-950 py-4 rounded-xl font-bold text-sm hover:bg-primary/80 transition-all shadow-[0_0_20px_rgba(56,189,248,0.2)] disabled:opacity-50 flex items-center justify-center gap-3"
-              >
-                {isTransferring ? <Activity className="animate-pulse" /> : <Send size={18} />}
-                {isTransferring ? "Broadcasting..." : "Initiate Tunnel"}
-              </button>
+      {/* Configuration Card (Preserved & Redesigned) */}
+      <Card className="border-slate-800 bg-gradient-to-br from-[#16191f] to-[#0d1117] p-6 shadow-elegant">
+        <div className="flex flex-col lg:flex-row items-center gap-8">
+          <div className="w-full lg:w-1/3 space-y-4">
+            <h3 className="text-sm font-bold flex items-center gap-2 text-slate-400 uppercase tracking-widest">
+              <Zap className="h-4 w-4 text-amber-400" /> Protocol Config
+            </h3>
+            <div className="grid grid-cols-1 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Source Node</label>
+                <Select value={selectedSource} onValueChange={setSelectedSource}>
+                  <SelectTrigger className="bg-[#0d1117] border-slate-800">
+                    <SelectValue placeholder="Select Origin" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {devices.map(d => <SelectItem key={d.id} value={String(d.id)}>{d.name || d.ip_address}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Destination Node</label>
+                <Select value={selectedDest} onValueChange={setSelectedDest}>
+                  <SelectTrigger className="bg-[#0d1117] border-slate-800">
+                    <SelectValue placeholder="Select Target" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {devices.map(d => <SelectItem key={d.id} value={String(d.id)}>{d.name || d.ip_address}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
 
-          <p className="text-xs text-center text-slate-500">
-            * All transfers are monitored and logged within the current network CIDR.
-          </p>
-        </div>
-
-        {/* Visualizer Area */}
-        <div className="glass-panel p-8 flex flex-col items-center justify-center min-h-[400px] relative overflow-hidden">
-          {isTransferring && (
-            <div className="absolute top-6 left-6 right-6 grid grid-cols-3 md:grid-cols-6 gap-2">
-              {[
-                { label: 'Bandwidth', val: `${metrics.bandwidth} MB/s` },
-                { label: 'Latency', val: `${metrics.latency} ms` },
-                { label: 'Throughput', val: `${metrics.throughput} %` },
-                { label: 'Ping', val: `${metrics.ping} ms` },
-                { label: 'Loss', val: `${metrics.packetLoss} %` },
-                { label: 'ETA', val: metrics.eta },
-              ].map(m => (
-                <div key={m.label} className="bg-slate-900/80 border border-slate-800 p-2 rounded-lg text-center animate-fade-in">
-                  <p className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">{m.label}</p>
-                  <p className="text-[10px] font-mono text-sky-400 font-bold">{m.val}</p>
+          <div className="flex-1 flex items-center justify-center relative w-full h-32 border-l border-slate-800 lg:pl-8">
+            <div className="flex items-center justify-between w-full max-w-md relative z-10">
+              <div className="flex flex-col items-center gap-2">
+                <div className="h-12 w-12 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center shadow-glow">
+                  <Server className="h-6 w-6 text-sky-400" />
                 </div>
-              ))}
-            </div>
-          )}
-
-          <div className="flex justify-between w-full max-w-md items-center relative z-10 mt-12">
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-16 h-16 rounded-2xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-center pulse-blue">
-                <Server className="text-sky-400" size={32} />
+                <span className="text-[10px] font-mono text-slate-500">{devices.find(d => String(d.id) === selectedSource)?.ip_address || '0.0.0.0'}</span>
               </div>
-              <p className="text-xs font-mono text-slate-400">
-                {devices.find(d => String(d?.id) === String(selectedSource))?.ip_address || 'Source Node'}
-              </p>
-            </div>
-
-            <div className="flex-1 h-px bg-slate-800 mx-4 relative overflow-hidden">
-                {isTransferring && (
-                  <div className="absolute inset-0 flex gap-4 animate-pulse">
-                    {[...Array(5)].map((_, i) => (
-                      <div key={i} className="h-full w-4 bg-sky-400/40 rounded-full blur-sm"></div>
-                    ))}
-                  </div>
-                )}
-            </div>
-
-            <div className="flex flex-col items-center gap-4">
-              <div className={`w-16 h-16 rounded-2xl bg-slate-900 border transition-all duration-500 flex items-center justify-center ${progress === 100 ? 'border-emerald-500 bg-emerald-500/10' : 'border-slate-800'}`}>
-                {progress === 100 ? <ShieldCheck className="text-emerald-400" size={32} /> : <Server className="text-slate-500" size={32} />}
+              <div className="flex-1 px-6 relative">
+                <div className="h-[2px] w-full bg-slate-800 relative">
+                  <div className="absolute inset-0 bg-sky-500/40 animate-shimmer blur-sm"></div>
+                </div>
+                <ArrowLeftRight className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-4 w-4 text-slate-600" />
               </div>
-              <p className="text-xs font-mono text-slate-400">
-                {devices.find(d => String(d?.id) === String(selectedDest))?.ip_address || 'Destination Node'}
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-12 w-full max-w-sm space-y-2">
-            <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-              <span>Transfer Progress</span>
-              <span>{progress}%</span>
-            </div>
-            <div className="h-2 w-full bg-slate-900 rounded-full overflow-hidden border border-slate-800/50">
-               <div 
-                 className="h-full bg-primary transition-all duration-300"
-                 style={{ width: `${progress}%` }}
-               />
+              <div className="flex flex-col items-center gap-2">
+                <div className="h-12 w-12 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center">
+                  <Server className="h-6 w-6 text-slate-500" />
+                </div>
+                <span className="text-[10px] font-mono text-slate-500">{devices.find(d => String(d.id) === selectedDest)?.ip_address || '0.0.0.0'}</span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </Card>
 
-      <div className="glass-panel p-8">
-        <h4 className="text-lg font-bold mb-6 flex items-center gap-2">
-          <Clock className="text-slate-500" size={18} /> Transfer Registry
-        </h4>
-        <div className="space-y-3">
-          {Array.isArray(transfers) && transfers.length > 0 ? transfers.map((t) => (
-            t && (
-              <div key={t.id} className="flex flex-col md:flex-row md:items-center justify-between p-4 bg-slate-900/30 rounded-xl border border-slate-800/50 gap-4">
-                <div className="flex items-center gap-4">
-                  <div className={`p-2 rounded-lg ${t.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
-                    {t.status === 'COMPLETED' ? <ShieldCheck size={16} /> : <AlertCircle size={16} />}
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold">{t.sender_ip || '0.0.0.0'} → {t.receiver_ip || '0.0.0.0'}</p>
-                    <div className="flex gap-3 text-[9px] text-slate-500 mt-1 uppercase font-bold tracking-tighter">
-                      <span>{t.bandwidth?.toFixed(1) || "0.0"} Mbps</span>
-                      <span>{t.latency?.toFixed(1) || "0.0"} ms Latency</span>
-                      <span>{t.packet_loss?.toFixed(2) || "0.00"}% Loss</span>
-                    </div>
-                  </div>
+      {/* Main Registry Card */}
+      <Card className="border-border bg-gradient-card p-4 shadow-elegant overflow-hidden">
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[240px]">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by file or peer…"
+              className="pl-9 bg-background/60"
+            />
+          </div>
+          <Tabs value={tab} onValueChange={setTab}>
+            <TabsList className="bg-background/40">
+              <TabsTrigger value="all">All</TabsTrigger>
+              <TabsTrigger value="active">Active</TabsTrigger>
+              <TabsTrigger value="completed">Completed</TabsTrigger>
+              <TabsTrigger value="failed">Failed</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>File</TableHead>
+                <TableHead>Peer</TableHead>
+                <TableHead>Direction</TableHead>
+                <TableHead className="w-[260px]">Progress</TableHead>
+                <TableHead className="text-right">Size</TableHead>
+                <TableHead className="text-right">Speed</TableHead>
+                <TableHead>Started</TableHead>
+                <TableHead className="w-10"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map((t) => {
+                const Icon = fileIcon[t.kind] || Activity;
+                return (
+                  <TableRow key={t.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-500/10 text-sky-400">
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <span className="text-sm font-medium text-slate-200">{t.name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs text-slate-500 font-mono">{t.peer}</TableCell>
+                    <TableCell>
+                      {t.direction === "upload" ? (
+                        <Badge variant="outline" className="border-amber-500/30 text-amber-500 bg-amber-500/5">
+                          <UploadIcon className="mr-1 h-3 w-3" /> Upload
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="border-sky-500/30 text-sky-500 bg-sky-500/5">
+                          <DownloadIcon className="mr-1 h-3 w-3" /> Download
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Progress value={t.progress} className="h-1.5 flex-1" />
+                        <span className="text-[11px] font-mono tabular-nums w-8 text-right text-slate-400">{t.progress}%</span>
+                      </div>
+                      <div className="mt-1.5 text-[10px] flex items-center gap-2">
+                        {t.status === "completed" ? (
+                          <span className="text-emerald-500 flex items-center gap-1 font-bold uppercase tracking-tighter"><CheckCircle2 className="h-3 w-3" /> Completed</span>
+                        ) : t.status === "failed" ? (
+                          <span className="text-rose-500 flex items-center gap-1 font-bold uppercase tracking-tighter"><AlertCircle className="h-3 w-3" /> Failed</span>
+                        ) : (
+                          <span className="text-slate-500 font-medium">Synchronizing bitstream...</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right text-xs tabular-nums text-slate-300">{t.sizeMb.toFixed(1)} MB</TableCell>
+                    <TableCell className="text-right text-xs tabular-nums text-sky-400 font-bold">{t.status === "active" ? `${t.speedMbps.toFixed(1)} Mbps` : "—"}</TableCell>
+                    <TableCell className="text-xs text-slate-500">{formatDistanceToNow(t.startedAt, { addSuffix: true })}</TableCell>
+                    <td className="px-6 py-4 text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-600 hover:text-white">
+                            <MoreVertical size={16} />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleDelete(t.id)} className="text-rose-500 focus:text-rose-400">
+                            <Trash2 className="mr-2 h-4 w-4" /> Remove Record
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </td>
+                  </TableRow>
+                );
+              })}
+              {filtered.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={8} className="py-12 text-center text-sm text-slate-500 italic">No transfers match your current filter.</TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </Card>
+
+      {/* New Transfer Modal (Preserved with exact smart-explainer style) */}
+      {showNewModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-300">
+          <Card className="w-full max-w-lg p-8 relative shadow-2xl border-slate-800 bg-[#0a0f1d]">
+            <button onClick={() => setShowNewModal(false)} className="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors">
+              <X size={20} />
+            </button>
+            <h3 className="text-xl font-bold flex items-center gap-3 mb-8">
+              <div className="p-2.5 bg-sky-500/10 rounded-xl"><Plus className="text-sky-400" size={20} /></div>
+              New Transfer Protocol
+            </h3>
+            <form onSubmit={handleStartTransfer} className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Origin Node</label>
+                  <Select value={selectedSource} onValueChange={setSelectedSource}>
+                    <SelectTrigger className="bg-[#0d1117] border-slate-800"><SelectValue placeholder="Source" /></SelectTrigger>
+                    <SelectContent>{devices.map(d => <SelectItem key={d.id} value={String(d.id)}>{d.name || d.ip_address}</SelectItem>)}</SelectContent>
+                  </Select>
                 </div>
-                <div className="text-right">
-                  <p className="text-xs font-bold text-slate-400">
-                    {t.timestamp ? new Date(t.timestamp).toLocaleDateString() : 'Unknown Date'}
-                  </p>
-                  <p className="text-[10px] text-slate-600 font-mono mt-0.5">
-                    {t.timestamp ? new Date(t.timestamp).toLocaleTimeString() : '---'}
-                  </p>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Target Node</label>
+                  <Select value={selectedDest} onValueChange={setSelectedDest}>
+                    <SelectTrigger className="bg-[#0d1117] border-slate-800"><SelectValue placeholder="Recipient" /></SelectTrigger>
+                    <SelectContent>{devices.map(d => <SelectItem key={d.id} value={String(d.id)}>{d.name || d.ip_address}</SelectItem>)}</SelectContent>
+                  </Select>
                 </div>
               </div>
-            )
-          )) : (
-            <div className="flex flex-col items-center justify-center py-10 opacity-50">
-               <Clock size={24} className="text-slate-500 mb-2" />
-               <p className="text-xs font-bold uppercase tracking-widest">No previous protocols in registry</p>
-            </div>
-          )}
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Data Stream Category</label>
+                <div className="grid grid-cols-4 gap-3">
+                  {[
+                    { id: 'doc', icon: FileText, label: 'Doc' },
+                    { id: 'image', icon: ImageIcon, label: 'Img' },
+                    { id: 'video', icon: Video, label: 'Vid' },
+                    { id: 'archive', icon: Archive, label: 'Archive' }
+                  ].map(type => (
+                    <button
+                      key={type.id} type="button" onClick={() => setSelectedFileType(type.id)}
+                      className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all ${selectedFileType === type.id ? "bg-sky-500/10 border-sky-500/50 text-white shadow-lg" : "bg-[#0d1117] border-slate-800 text-slate-500 hover:border-slate-700"}`}
+                    >
+                      <type.icon size={18} />
+                      <span className="text-[10px] font-bold uppercase">{type.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <Button type="submit" disabled={isTransferring} className="w-full py-6 font-bold text-sm">
+                {isTransferring ? 'Broadcasting...' : 'Execute Transfer'}
+              </Button>
+            </form>
+          </Card>
         </div>
-      </div>
+      )}
     </div>
   );
 };
+
+function Stat({ label, value, icon: Icon, tone }) {
+  const tones = {
+    primary: "text-sky-400 bg-sky-400/10 border-sky-400/20",
+    success: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20",
+    warning: "text-amber-400 bg-amber-400/10 border-amber-400/20",
+    destructive: "text-rose-400 bg-rose-400/10 border-rose-400/20"
+  };
+  return (
+    <Card className="bg-gradient-card border-border p-4 shadow-elegant flex items-center gap-4">
+      <div className={`h-10 w-10 rounded-lg flex items-center justify-center border ${tones[tone]}`}>
+        <Icon className="h-5 w-5" />
+      </div>
+      <div>
+        <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{label}</div>
+        <div className="text-xl font-bold tabular-nums text-white">{value}</div>
+      </div>
+    </Card>
+  );
+}
 
 export default Transfers;

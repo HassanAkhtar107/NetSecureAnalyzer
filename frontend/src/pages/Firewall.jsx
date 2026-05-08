@@ -1,164 +1,349 @@
-import React, { useState, useEffect } from 'react';
-
-import {
-  Shield, ShieldOff, AlertTriangle, Activity, Lock, Globe, 
-  Search, Filter, ChevronDown, CheckCircle2, XCircle, Clock, 
-  Zap, Info, ExternalLink, ArrowRight, Save, Trash2, Plus
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  Shield, ShieldAlert, ShieldCheck, Plus, Search, Trash2, Ban, 
+  CheckCircle2, Activity, X, AlertCircle
 } from 'lucide-react';
-import {firewallApi} from '../api';
-import {toast} from 'sonner';
+import { firewallApi } from '../api';
+import { toast } from 'sonner';
+import { formatDistanceToNow, isValid } from 'date-fns';
+import { Card } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Badge } from '../components/ui/badge';
+import { Switch } from '../components/ui/switch';
+import { Label } from '../components/ui/label';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
+import { 
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow 
+} from '../components/ui/table';
+import { 
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue 
+} from '../components/ui/select';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, 
+  DialogHeader, DialogTitle, DialogTrigger 
+} from '../components/ui/dialog';
+import SummaryCard from '../components/SummaryCard';
 
-const Firewall = () => {
-  const [logs, setLogs] = useState([]);
-  const [isProtectionActive, setIsProtectionActive] = useState(true);
+const Firewall = ({ userType }) => {
+  const [rules, setRules] = useState([]);
+  const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [query, setQuery] = useState('');
+  const [actionFilter, setActionFilter] = useState('all');
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState({
+    name: '',
+    action: 'ALLOW',
+    direction: 'IN',
+    protocol: 'TCP',
+    source: 'any',
+    destination: 'any',
+    port: '',
+    enabled: true
+  });
 
-  const fetchLogs = async () => {
+  const fetchData = async () => {
     try {
-      const res = await firewallApi.logs();
-      if (Array.isArray(res.data)) {
-        setLogs(res.data);
-      } else {
-        setLogs([]);
+      const [rulesRes, logsRes] = await Promise.all([
+        firewallApi.rules(),
+        firewallApi.logs()
+      ]);
+      
+      let fetchedRules = Array.isArray(rulesRes.data) ? rulesRes.data : [];
+      let fetchedLogs = Array.isArray(logsRes.data) ? logsRes.data : [];
+
+      if (fetchedRules.length === 0) {
+        fetchedRules = [
+          { id: "r1", name: "Allow HTTPS", action: "ALLOW", direction: "OUT", protocol: "TCP", source: "any", destination: "any", port: "443", enabled: true, hits: 18420 },
+          { id: "r2", name: "Allow DNS", action: "ALLOW", direction: "OUT", protocol: "UDP", source: "any", destination: "any", port: "53", enabled: true, hits: 9821 },
+          { id: "r3", name: "Block SMB Inbound", action: "DENY", direction: "IN", protocol: "TCP", source: "any", destination: "any", port: "445", enabled: true, hits: 312 },
+          { id: "r4", name: "Block Telnet", action: "DENY", direction: "IN", protocol: "TCP", source: "any", destination: "any", port: "23", enabled: true, hits: 88 },
+          { id: "r5", name: "Allow LAN ICMP", action: "ALLOW", direction: "IN", protocol: "ICMP", source: "192.168.0.0/16", destination: "any", port: "*", enabled: true, hits: 4520 },
+        ];
       }
+
+      if (fetchedLogs.length === 0) {
+        fetchedLogs = [
+          { id: "e1", timestamp: new Date(Date.now() - 5000).toISOString(), sender_ip: "203.45.91.22", port: 445, protocol: "TCP", action: "DENY", reason: "Port scan", ruleName: "Block SMB Inbound" },
+          { id: "e2", timestamp: new Date(Date.now() - 15000).toISOString(), sender_ip: "192.168.1.42", port: 443, protocol: "TCP", action: "ALLOW", reason: "HTTPS Traffic", ruleName: "Allow HTTPS" },
+          { id: "e3", timestamp: new Date(Date.now() - 30000).toISOString(), sender_ip: "172.16.0.5", port: 53, protocol: "UDP", action: "ALLOW", reason: "DNS query", ruleName: "Allow DNS" },
+        ];
+      }
+
+      setRules(fetchedRules);
+      setEvents(fetchedLogs);
     } catch (err) {
-      console.error("Firewall logs error", err);
+      console.error("Fetch error:", err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchLogs();
-    const interval = setInterval(fetchLogs, 10000);
+    fetchData();
+    const interval = setInterval(fetchData, 8000);
     return () => clearInterval(interval);
   }, []);
 
-  const toggleProtection = async () => {
+  const stats = useMemo(() => {
+    const allowed = events.filter((e) => e.action === "ALLOW").length;
+    const denied = events.filter((e) => e.action === "DENY").length;
+    return {
+      total: rules.length,
+      enabled: rules.filter((r) => r.enabled).length,
+      allowed,
+      denied,
+    };
+  }, [rules, events]);
+
+  const filteredRules = useMemo(() => {
+    return rules.filter((r) => {
+      if (actionFilter !== "all" && r.action !== actionFilter) return false;
+      if (query && !`${r.name} ${r.source} ${r.destination} ${r.port}`.toLowerCase().includes(query.toLowerCase())) return false;
+      return true;
+    });
+  }, [rules, query, actionFilter]);
+
+  const handleToggleRule = async (id) => {
     try {
-      const res = await firewallApi.toggle();
-      setIsProtectionActive(res.data.is_active);
-      toast.success(`Packet Filtering ${res.data.is_active ? 'Activated' : 'Suspended'}`);
-    } catch (err) {
-      toast.error("Security core communication failure");
-    }
+      await firewallApi.toggleRule(id);
+      toast.success("Rule toggled");
+      fetchData();
+    } catch (err) { toast.error("Action failed"); }
+  };
+
+  const handleRemoveRule = async (id) => {
+    try {
+      await firewallApi.deleteRule(id);
+      toast.success("Rule removed");
+      fetchData();
+    } catch (err) { toast.error("Removal failed"); }
+  };
+
+  const handleAddRule = async () => {
+    if (!draft.name.trim()) return toast.error("Name is required");
+    try {
+      await firewallApi.createRule(draft);
+      toast.success("Rule added");
+      setOpen(false);
+      setDraft({ name: "", action: "ALLOW", direction: "IN", protocol: "TCP", source: "any", destination: "any", port: "", enabled: true });
+      fetchData();
+    } catch (err) { toast.error("Addition failed"); }
   };
 
   return (
-    <div className="space-y-8 pb-10">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div className="space-y-6 p-4 md:p-6 animate-in fade-in duration-500">
+      <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold flex items-center gap-3 tracking-tight">
-            <Shield className="text-rose-400" size={28} />
-            Deep Packet Inspection Core
-          </h2>
-          <p className="text-slate-500 text-sm mt-1">Real-time heuristics and threat neutralization engine.</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-white">Firewall</h1>
+          <p className="text-sm text-slate-500">Manage ALLOW / DENY rules and monitor real-time traffic decisions.</p>
         </div>
-        <button 
-          onClick={toggleProtection}
-          className={`px-8 py-3 rounded-2xl font-bold text-sm transition-all shadow-xl flex items-center gap-3 ${
-            isProtectionActive 
-            ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20' 
-            : 'bg-emerald-500 text-slate-950 hover:bg-emerald-400'
-          }`}
-        >
-          {isProtectionActive ? <ShieldOff size={18} /> : <Shield size={18} />}
-          {isProtectionActive ? 'Suspend Protection' : 'Activate Defense'}
-        </button>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button className="gap-2 shadow-glow">
+              <Plus className="h-4 w-4" /> New Rule
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-md bg-[#0a0f1d] border-slate-800">
+            <DialogHeader>
+              <DialogTitle>Create firewall rule</DialogTitle>
+              <DialogDescription>Define matching criteria and the action to take.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-3 py-2">
+              <div className="grid gap-1.5">
+                <Label>Name</Label>
+                <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Block bad actor" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-1.5">
+                  <Label>Action</Label>
+                  <Select value={draft.action} onValueChange={(v) => setDraft({ ...draft, action: v })}>
+                    <SelectTrigger className="bg-[#0d1117]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALLOW">ALLOW</SelectItem>
+                      <SelectItem value="DENY">DENY</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-1.5">
+                  <Label>Direction</Label>
+                  <Select value={draft.direction} onValueChange={(v) => setDraft({ ...draft, direction: v })}>
+                    <SelectTrigger className="bg-[#0d1117]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="IN">Inbound</SelectItem>
+                      <SelectItem value="OUT">Outbound</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-1.5">
+                  <Label>Protocol</Label>
+                  <Select value={draft.protocol} onValueChange={(v) => setDraft({ ...draft, protocol: v })}>
+                    <SelectTrigger className="bg-[#0d1117]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="TCP">TCP</SelectItem>
+                      <SelectItem value="UDP">UDP</SelectItem>
+                      <SelectItem value="ICMP">ICMP</SelectItem>
+                      <SelectItem value="ANY">ANY</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-1.5">
+                  <Label>Port</Label>
+                  <Input value={draft.port} onChange={(e) => setDraft({ ...draft, port: e.target.value })} placeholder="443 or *" />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label>Source</Label>
+                  <Input value={draft.source} onChange={(e) => setDraft({ ...draft, source: e.target.value })} />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label>Destination</Label>
+                  <Input value={draft.destination} onChange={(e) => setDraft({ ...draft, destination: e.target.value })} />
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={draft.enabled} onCheckedChange={(v) => setDraft({ ...draft, enabled: v })} />
+                <Label>Enable immediately</Label>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button onClick={handleAddRule}>Create rule</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-         {/* Live Metrics */}
-         <div className="lg:col-span-1 space-y-4">
-            <div className="glass-panel p-6 border-slate-800">
-               <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 bg-emerald-500/10 rounded-lg">
-                     <Activity size={18} className="text-emerald-400" />
-                  </div>
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Inspection Rate</span>
-               </div>
-               <h3 className="text-2xl font-bold">482 <span className="text-xs font-normal text-slate-500">pkt/sec</span></h3>
-            </div>
-            <div className="glass-panel p-6 border-slate-800">
-               <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 bg-amber-500/10 rounded-lg">
-                     <AlertTriangle size={18} className="text-amber-400" />
-                  </div>
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Heuristic Alerts</span>
-               </div>
-               <h3 className="text-2xl font-bold">14 <span className="text-xs font-normal text-slate-500">last hour</span></h3>
-            </div>
-            <div className="glass-panel p-6 border-rose-500/20 bg-rose-500/[0.02]">
-               <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 bg-rose-500/10 rounded-lg">
-                     <Lock size={18} className="text-rose-400" />
-                  </div>
-                  <span className="text-xs font-bold text-rose-400 uppercase tracking-widest">Nodes Blocked</span>
-               </div>
-               <h3 className="text-2xl font-bold text-rose-400">3</h3>
-            </div>
-         </div>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <SummaryCard label="Total rules" value={stats.total} icon={Shield} tone="primary" />
+        <SummaryCard label="Enabled" value={stats.enabled} icon={CheckCircle2} tone="success" />
+        <SummaryCard label="Allowed (1m)" value={stats.allowed} icon={ShieldCheck} tone="success" />
+        <SummaryCard label="Denied (1m)" value={stats.denied} icon={ShieldAlert} tone="destructive" />
+      </div>
 
-         {/* Intercept Logs */}
-         <div className="lg:col-span-3 glass-panel p-8">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-               <h3 className="text-lg font-bold">Heuristic Event Log</h3>
-               <div className="relative w-full md:w-64">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" size={14} />
-                  <input 
-                    type="text" 
-                    placeholder="Search source IP..."
-                    className="w-full bg-slate-900/50 border border-slate-800 rounded-xl py-2 pl-9 pr-4 text-xs focus:border-rose-500/30 outline-none"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-               </div>
+      <Tabs defaultValue="rules">
+        <TabsList className="bg-[#0d1117] border border-slate-800">
+          <TabsTrigger value="rules">Rules</TabsTrigger>
+          <TabsTrigger value="events">Live Events</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="rules" className="mt-4">
+          <Card className="bg-gradient-card border-border p-4 shadow-elegant overflow-hidden">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <div className="relative flex-1 min-w-[220px]">
+                <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search rules…" className="pl-8 bg-background/40" />
+              </div>
+              <Select value={actionFilter} onValueChange={setActionFilter}>
+                <SelectTrigger className="w-[140px] bg-background/40"><SelectValue placeholder="All actions" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All actions</SelectItem>
+                  <SelectItem value="ALLOW">ALLOW</SelectItem>
+                  <SelectItem value="DENY">DENY</SelectItem>
+                </SelectContent>
+              </Select>
+              {(query || actionFilter !== "all") && (
+                <Button variant="ghost" size="sm" onClick={() => { setQuery(""); setActionFilter("all"); }}>
+                  <X className="mr-1 h-3 w-3" /> Clear
+                </Button>
+              )}
             </div>
 
             <div className="overflow-x-auto">
-               <table className="w-full text-left">
-                  <thead>
-                     <tr className="text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-800 pb-4">
-                        <th className="px-4 py-3">Timestamp</th>
-                        <th className="px-4 py-3">Source Interface</th>
-                        <th className="px-4 py-3">Classification</th>
-                        <th className="px-4 py-3 text-right">Action Taken</th>
-                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/50">
-                     {logs.filter(l => l.source_ip.includes(searchTerm)).map((log, idx) => (
-                        <tr 
-                          key={idx}
-                          className="group hover:bg-slate-800/20"
-                        >
-                           <td className="px-4 py-4 text-[10px] font-mono text-slate-500">
-                              {new Date(log.timestamp).toLocaleTimeString()}
-                           </td>
-                           <td className="px-4 py-4">
-                              <p className="text-xs font-bold text-slate-200">{log.source_ip}</p>
-                              <p className="text-[10px] text-slate-500 font-mono mt-0.5">{log.reason || 'Anomalous traffic pattern detected'}</p>
-                           </td>
-                           <td className="px-4 py-4">
-                              <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-tighter ${
-                                log.action === 'BLOCK' ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'
-                              }`}>
-                                 {log.action === 'BLOCK' ? 'Malicious' : 'Permitted'}
-                              </span>
-                           </td>
-                           <td className="px-4 py-4 text-right">
-                              <div className="flex items-center justify-end gap-2 text-slate-400">
-                                 {log.action === 'BLOCK' ? <XCircle size={14} className="text-rose-500" /> : <CheckCircle2 size={14} className="text-emerald-500" />}
-                                 <span className="text-[10px] font-bold uppercase">{log.action === 'BLOCK' ? 'Dropped' : 'Forwarded'}</span>
-                              </div>
-                           </td>
-                        </tr>
-                     ))}
-                  </tbody>
-               </table>
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead>Name</TableHead>
+                    <TableHead>Action</TableHead>
+                    <TableHead>Dir</TableHead>
+                    <TableHead>Proto</TableHead>
+                    <TableHead>Source</TableHead>
+                    <TableHead>Dest</TableHead>
+                    <TableHead>Port</TableHead>
+                    <TableHead className="text-right">Hits</TableHead>
+                    <TableHead>Enabled</TableHead>
+                    <TableHead className="w-10"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredRules.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell className="font-medium text-slate-200">{r.name}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={r.action === "ALLOW" ? "border-emerald-500/40 text-emerald-500 bg-emerald-500/5" : "border-rose-500/40 text-rose-500 bg-rose-500/5"}>
+                          {r.action}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-[10px] uppercase font-bold text-slate-500">{r.direction}</TableCell>
+                      <TableCell className="text-xs text-slate-400 font-mono">{r.protocol}</TableCell>
+                      <TableCell className="text-xs text-slate-400 font-mono">{r.source}</TableCell>
+                      <TableCell className="text-xs text-slate-400 font-mono">{r.destination}</TableCell>
+                      <TableCell className="text-xs text-slate-400 font-mono">{r.port}</TableCell>
+                      <TableCell className="text-right tabular-nums text-sky-400 font-bold">{r.hits?.toLocaleString() || 0}</TableCell>
+                      <TableCell>
+                        <Switch checked={r.enabled} onCheckedChange={() => handleToggleRule(r.id)} />
+                      </TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="icon" onClick={() => handleRemoveRule(r.id)} className="h-8 w-8 text-slate-600 hover:text-rose-500">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {filteredRules.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={10} className="py-10 text-center text-sm text-slate-500 italic">No rules match your filters.</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
             </div>
-         </div>
-      </div>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="events" className="mt-4">
+          <Card className="bg-gradient-card border-border p-4 shadow-elegant overflow-hidden">
+            <div className="mb-3 flex items-center gap-2">
+              <Activity className="h-4 w-4 text-sky-500" />
+              <h3 className="text-sm font-semibold text-white">Live decisions</h3>
+              <Badge variant="outline" className="animate-pulse bg-sky-500/5 text-sky-400 border-sky-500/20 text-[9px]">streaming</Badge>
+            </div>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead>When</TableHead>
+                    <TableHead>Source IP</TableHead>
+                    <TableHead>Port</TableHead>
+                    <TableHead>Proto</TableHead>
+                    <TableHead>Action</TableHead>
+                    <TableHead>Rule</TableHead>
+                    <TableHead>Reason</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {events.map((e) => (
+                    <TableRow key={e.id}>
+                      <TableCell className="text-xs text-slate-500">{isValid(new Date(e.timestamp)) ? formatDistanceToNow(new Date(e.timestamp), { addSuffix: true }) : '---'}</TableCell>
+                      <TableCell className="font-mono text-xs text-slate-300">{e.sender_ip || e.ip}</TableCell>
+                      <TableCell className="tabular-nums text-xs text-slate-400">{e.port}</TableCell>
+                      <TableCell className="text-xs text-slate-500 uppercase">{e.protocol}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={e.action === "ALLOW" ? "border-emerald-500/40 text-emerald-500 bg-emerald-500/5" : "border-rose-500/40 text-rose-500 bg-rose-500/5"}>
+                          {e.action === "ALLOW" ? <ShieldCheck className="mr-1.5 h-3 w-3" /> : <Ban className="mr-1.5 h-3 w-3" />}
+                          {e.action}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-slate-400">{e.ruleName || '---'}</TableCell>
+                      <TableCell className="text-[10px] font-bold text-slate-600 uppercase tracking-tighter">{e.reason}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

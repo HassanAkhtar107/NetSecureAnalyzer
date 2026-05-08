@@ -20,7 +20,8 @@ from analyzer.api.views import (
     FirewallLogViewSet,
     VPNServerViewSet,
     VPNStatusViewSet,
-    FirewallRuleViewSet
+    FirewallRuleViewSet,
+    UserDeviceViewSet
 )
 
 if settings.DEBUG:
@@ -47,6 +48,7 @@ router.register("firewall-logs", FirewallLogViewSet, basename="firewall-log")
 router.register("vpn-servers", VPNServerViewSet, basename="vpn-server")
 router.register("vpn-status", VPNStatusViewSet, basename="vpn-status")
 router.register("firewall-rules", FirewallRuleViewSet, basename="firewall-rule")
+router.register("user-devices", UserDeviceViewSet, basename="user-device")
 
 
 app_name = "api"

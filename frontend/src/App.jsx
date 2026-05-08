@@ -5,12 +5,12 @@ import Dashboard from './pages/Dashboard';
 import Devices from './pages/Devices';
 import Transfers from './pages/Transfers';
 import Firewall from './pages/Firewall';
-import Topology from './pages/Topology';
-import VPN from './pages/VPN';
 import Received from './pages/Received';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import { NetworkProvider } from './context/NetworkContext';
+import useDeviceRegistration from './hooks/useDeviceRegistration';
+import BlockedModal from './components/BlockedModal';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
@@ -22,6 +22,8 @@ function App() {
   });
 
   const [user, setUser] = useState(null);
+
+  const { isBlocked, deviceInfo, reCheck } = useDeviceRegistration(isAuthenticated, user);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -57,6 +59,13 @@ function App() {
 
   return (
     <NetworkProvider>
+      {isBlocked && (
+        <BlockedModal
+          deviceInfo={deviceInfo}
+          onRetry={reCheck}
+          onLogout={handleLogout}
+        />
+      )}
       <Router>
         <Routes>
           <Route
@@ -73,16 +82,14 @@ function App() {
               isAuthenticated ? (
                 <AppLayout user={user} onLogout={handleLogout}>
                   <Routes>
-                    <Route path="/" element={<Dashboard userType={userType} />} />
-                    <Route path="/devices" element={<Devices userType={userType} />} />
                     <Route path="/received" element={<Received />} />
                     <Route path="/data-transfer" element={<Transfers userType={userType} />} />
-                    <Route path="/vpn" element={<VPN />} />
+                    <Route path="/" element={<Dashboard userType={userType} />} />
 
                     {userType === 'ADMIN' && (
                       <>
+                        <Route path="/devices" element={<Devices userType={userType} />} />
                         <Route path="/firewall" element={<Firewall />} />
-                        <Route path="/topology" element={<Topology />} />
                       </>
                     )}
 

@@ -2,7 +2,7 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.db.models import Count
-from ..models import Network, Device, DataTransfer, FirewallLog, VPNServer, VPNStatus, FirewallRule
+from ..models import Network, Device, DataTransfer, FirewallLog, VPNServer, VPNStatus, FirewallRule, UserDevice
 from .serializers import (
     NetworkSerializer,
     DeviceSerializer,
@@ -10,9 +10,120 @@ from .serializers import (
     FirewallLogSerializer,
     VPNServerSerializer,
     VPNStatusSerializer,
-    FirewallRuleSerializer
+    FirewallRuleSerializer,
+    UserDeviceSerializer
 )
 from ..utils import block_ip, unblock_ip, get_network_stats, simulate_transfer_stats
+
+# ... (previous ViewSets)
+
+class UserDeviceViewSet(viewsets.ModelViewSet):
+    queryset = UserDevice.objects.all()
+    serializer_class = UserDeviceSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.user_type == 'ADMIN':
+            return UserDevice.objects.all().order_by('-last_active')
+        return UserDevice.objects.filter(user=user).order_by('-last_active')
+
+    @action(detail=False, methods=['post'])
+    def register(self, request):
+        user = request.user
+        device_id = request.data.get('device_id')
+        device_name = request.data.get('device_name', 'Unknown Device')
+        ip_address = request.data.get('ip_address')
+        browser_info = request.data.get('browser_info', '')
+        country = request.data.get('country', '')
+        vpn_status = request.data.get('vpn_status', False)
+
+        if not device_id:
+            return Response({"error": "device_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        device, created = UserDevice.objects.get_or_create(
+            user=user,
+            device_id=device_id,
+            defaults={
+                'device_name': device_name,
+                'ip_address': ip_address or request.META.get('REMOTE_ADDR'),
+                'browser_info': browser_info,
+                'country': country,
+                'vpn_status': vpn_status
+            }
+        )
+
+        if not created:
+            # Update existing device info
+            device.ip_address = ip_address or request.META.get('REMOTE_ADDR')
+            device.browser_info = browser_info
+            
+            # Re-validation Logic
+            if device.is_blocked and vpn_status:
+                device.is_blocked = False
+                device.vpn_status = True
+                device.save()
+                
+                FirewallLog.objects.create(
+                    action='ALLOW',
+                    source_ip=device.ip_address,
+                    reason=f"VPN Detected. Firewall Access Restored for {device.device_name}"
+                )
+                
+                return Response({
+                    "status": "RESTORED",
+                    "message": "VPN Detected - Access Restored",
+                    "device": UserDeviceSerializer(device).data
+                })
+                
+            device.vpn_status = vpn_status
+            if country:
+                device.country = country
+            device.save()
+
+        # Check if blocked
+        if device.is_blocked:
+            return Response({
+                "status": "BLOCKED",
+                "message": "Access Blocked by Firewall",
+                "detail": "Your network/device is currently restricted."
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        return Response(UserDeviceSerializer(device).data)
+
+    @action(detail=True, methods=['post'])
+    def block(self, request, pk=None):
+        if request.user.user_type != 'ADMIN':
+            return Response({"error": "Admin access required"}, status=status.HTTP_403_FORBIDDEN)
+        device = self.get_object()
+        device.is_blocked = True
+        device.save()
+        
+        # Log firewall action
+        FirewallLog.objects.create(
+            action='BLOCK',
+            source_ip=device.ip_address,
+            reason=f"Device {device.device_name} ({device.device_id}) blocked by Admin"
+        )
+        
+        return Response({"status": "Device blocked"})
+
+    @action(detail=True, methods=['post'])
+    def unblock(self, request, pk=None):
+        if request.user.user_type != 'ADMIN':
+            return Response({"error": "Admin access required"}, status=status.HTTP_403_FORBIDDEN)
+        device = self.get_object()
+        device.is_blocked = False
+        device.save()
+        
+        # Log firewall action
+        FirewallLog.objects.create(
+            action='ALLOW',
+            source_ip=device.ip_address,
+            reason=f"Device {device.device_name} ({device.device_id}) unblocked by Admin"
+        )
+        
+        return Response({"status": "Device unblocked"})
 
 class NetworkViewSet(viewsets.ModelViewSet):
     queryset = Network.objects.all()

@@ -120,3 +120,22 @@ class VPNStatus(models.Model):
 
     def __str__(self):
         return f"VPN for {self.user.email}: {'ON' if self.is_active else 'OFF'}"
+
+class UserDevice(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='user_devices')
+    device_id = models.CharField(max_length=255) # Browser fingerprint or similar
+    device_name = models.CharField(max_length=255)
+    ip_address = models.GenericIPAddressField()
+    country = models.CharField(max_length=100, null=True, blank=True)
+    location = models.CharField(max_length=255, null=True, blank=True)
+    browser_info = models.TextField(null=True, blank=True)
+    vpn_status = models.BooleanField(default=False)
+    is_blocked = models.BooleanField(default=False)
+    last_active = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'device_id')
+
+    def __str__(self):
+        return f"{self.user.email} - {self.device_name} ({self.ip_address})"

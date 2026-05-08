@@ -48,6 +48,13 @@ export const devicesApi = {
     deny: (id) => api.post(`/devices/${id}/deny/`),
 };
 
+export const userDevicesApi = {
+    list: () => api.get('/user-devices/'),
+    register: (data) => api.post('/user-devices/register/', data),
+    block: (id) => api.post(`/user-devices/${id}/block/`),
+    unblock: (id) => api.post(`/user-devices/${id}/unblock/`),
+};
+
 export const transfersApi = {
     list: () => api.get('/transfers/'),
     create: (data) => api.post('/transfers/', data),
