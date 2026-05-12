@@ -36,58 +36,69 @@ class UserDeviceViewSet(viewsets.ModelViewSet):
         ip_address = request.data.get('ip_address')
         browser_info = request.data.get('browser_info', '')
         country = request.data.get('country', '')
-        vpn_status = request.data.get('vpn_status', False)
 
         if not device_id:
             return Response({"error": "device_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        current_ip = ip_address or request.META.get('REMOTE_ADDR')
 
         device, created = UserDevice.objects.get_or_create(
             user=user,
             device_id=device_id,
             defaults={
                 'device_name': device_name,
-                'ip_address': ip_address or request.META.get('REMOTE_ADDR'),
+                'ip_address': current_ip,
+                'original_ip': current_ip,  # Save the first-seen IP permanently
                 'browser_info': browser_info,
                 'country': country,
-                'vpn_status': vpn_status
+                'vpn_status': False
             }
         )
 
         if not created:
-            # Update existing device info
-            device.ip_address = ip_address or request.META.get('REMOTE_ADDR')
+            device.ip_address = current_ip
             device.browser_info = browser_info
-            
-            # Re-validation Logic
-            if device.is_blocked and vpn_status:
-                device.is_blocked = False
-                device.vpn_status = True
-                device.save()
-                
-                FirewallLog.objects.create(
-                    action='ALLOW',
-                    source_ip=device.ip_address,
-                    reason=f"VPN Detected. Firewall Access Restored for {device.device_name}"
-                )
-                
-                return Response({
-                    "status": "RESTORED",
-                    "message": "VPN Detected - Access Restored",
-                    "device": UserDeviceSerializer(device).data
-                })
-                
-            device.vpn_status = vpn_status
             if country:
                 device.country = country
-            device.save()
+            # If original_ip was never set (old records), set it now
+            if not device.original_ip:
+                device.original_ip = current_ip
+
+        # Server-side VPN detection: if current IP differs from original IP, VPN is active
+        is_vpn_active = bool(device.original_ip and current_ip != device.original_ip)
+        device.vpn_status = is_vpn_active
+        device.save()
 
         # Check if blocked
         if device.is_blocked:
-            return Response({
-                "status": "BLOCKED",
-                "message": "Access Blocked by Firewall",
-                "detail": "Your network/device is currently restricted."
-            }, status=status.HTTP_403_FORBIDDEN)
+            if is_vpn_active:
+                # VPN detected — allow temporary bypass without removing the block in DB
+                FirewallLog.objects.create(
+                    action='ALLOW',
+                    source_ip=current_ip,
+                    reason=f"VPN Bypass: IP changed from {device.original_ip} to {current_ip} for {device.device_name}"
+                )
+                device_data = UserDeviceSerializer(device).data
+                device_data['is_blocked'] = False  # Tell frontend to allow access
+                
+                return Response({
+                    "status": "VPN_BYPASS",
+                    "message": "VPN Detected - Access Restored",
+                    "device": device_data
+                })
+            else:
+                return Response({
+                    "status": "BLOCKED",
+                    "message": "Access Blocked by Firewall",
+                    "detail": "Your network/device is currently restricted.",
+                    "original_ip": device.original_ip,
+                    "current_ip": current_ip,
+                }, status=status.HTTP_403_FORBIDDEN)
+
+        # Not blocked — update original_ip to current (so it tracks their real IP)
+        if not is_vpn_active:
+            device.original_ip = current_ip
+            device.save()
 
         return Response(UserDeviceSerializer(device).data)
 

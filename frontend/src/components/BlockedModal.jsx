@@ -1,61 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldAlert, Globe, RefreshCcw, LogOut, Zap, Loader2, ShieldCheck, Lock, MapPin } from 'lucide-react';
+import { RefreshCcw, LogOut, Zap, Loader2, ShieldCheck, Lock, MapPin } from 'lucide-react';
 import { vpnApi } from '../api';
 import { toast } from 'sonner';
-import SecurityFlow from './SecurityFlow';
 
 const BlockedModal = ({ deviceInfo, onRetry, onLogout }) => {
     const [isConnecting, setIsConnecting] = useState(false);
-    const [vpnStatus, setVpnStatus] = useState({ is_active: false });
-
-    useEffect(() => {
-        const checkVPN = async () => {
-            try {
-                const res = await vpnApi.status();
-                setVpnStatus(res.data);
-            } catch (err) {
-                console.error("Failed to check VPN status", err);
-            }
-        };
-        checkVPN();
-        const interval = setInterval(checkVPN, 5000);
-        return () => clearInterval(interval);
-    }, []);
-
-    const handleSimulateVPN = async () => {
-        setIsConnecting(true);
-        try {
-            await vpnApi.connect({ country: 'Germany' });
-            toast.success("VPN Tunnel Established", {
-                description: "Routing through secure nodes. Re-validating access...",
-                duration: 3000
-            });
-            setTimeout(() => {
-                onRetry();
-                setIsConnecting(false);
-            }, 2000);
-        } catch (err) {
-            toast.error("Failed to establish VPN connection");
-            setIsConnecting(false);
-        }
-    };
 
     return (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950 p-4">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(244,63,94,0.1),transparent_70%)]" />
-            
+
             <div className="bg-[#0a0f1d] border border-rose-500/30 rounded-[2.5rem] p-8 md:p-10 w-full max-w-2xl shadow-[0_0_50px_rgba(244,63,94,0.15)] relative overflow-hidden text-center">
                 {/* Decorative Elements */}
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-1 bg-gradient-to-r from-transparent via-rose-500 to-transparent" />
-                
-                <div className="mb-6">
-                    <SecurityFlow deviceInfo={deviceInfo} />
-                </div>
 
                 <h1 className="text-3xl md:text-4xl font-black text-white mb-2 tracking-tight">
                     Access Blocked by Firewall
                 </h1>
-                
+
                 <p className="text-rose-400/80 text-base md:text-lg mb-8 font-medium max-w-md mx-auto">
                     Your device/network is currently restricted by security policies.
                 </p>
@@ -76,8 +38,8 @@ const BlockedModal = ({ deviceInfo, onRetry, onLogout }) => {
                         <div className="flex justify-between items-center">
                             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">VPN Status</span>
                             <div className="flex items-center gap-2">
-                                <Badge className={vpnStatus.is_active ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-slate-800 text-slate-500 border-slate-700"}>
-                                    {vpnStatus.is_active ? 'ENCRYPTED' : 'DIRECT'}
+                                <Badge className={deviceInfo?.vpn_status ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-slate-800 text-slate-500 border-slate-700"}>
+                                    {deviceInfo?.vpn_status ? 'ENCRYPTED' : 'DIRECT'}
                                 </Badge>
                             </div>
                         </div>
@@ -86,43 +48,34 @@ const BlockedModal = ({ deviceInfo, onRetry, onLogout }) => {
                     <div className="bg-slate-900/50 border border-slate-800 rounded-3xl p-6 flex flex-col justify-center gap-4">
                         <div className="flex items-start gap-3 text-left">
                             <div className="mt-1">
-                                {vpnStatus.is_active ? 
-                                    <ShieldCheck size={18} className="text-emerald-500" /> : 
+                                {deviceInfo?.vpn_status ?
+                                    <ShieldCheck size={18} className="text-emerald-500" /> :
                                     <Zap size={18} className="text-sky-500 animate-pulse" />
                                 }
                             </div>
                             <div>
                                 <p className="text-xs font-bold text-white uppercase tracking-wider mb-1">
-                                    {vpnStatus.is_active ? 'VPN Connected' : 'VPN Bypass Available'}
+                                    {deviceInfo?.vpn_status ? 'VPN Connected' : 'VPN Bypass Available'}
                                 </p>
                                 <p className="text-[10px] text-slate-500 leading-relaxed">
-                                    {vpnStatus.is_active ? 
-                                        'Secure tunnel active. Try re-validating access.' : 
-                                        'Use a VPN to change your IP and bypass firewall restrictions.'
+                                    {deviceInfo?.vpn_status ?
+                                        'Secure tunnel active. Try re-validating access.' :
+                                        'Turn on a real VPN on your device to bypass firewall restrictions.'
                                     }
                                 </p>
                             </div>
                         </div>
-                        
-                        <button
-                            onClick={handleSimulateVPN}
-                            disabled={isConnecting || vpnStatus.is_active}
-                            className="w-full py-3 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-xl flex justify-center items-center gap-2 transition-all disabled:opacity-50 disabled:grayscale"
-                        >
-                            {isConnecting ? <Loader2 className="animate-spin" size={16} /> : <Lock size={16} />}
-                            {isConnecting ? 'Tunneling...' : vpnStatus.is_active ? 'VPN Tunnel Active' : 'Establish VPN Tunnel'}
-                        </button>
                     </div>
                 </div>
 
                 <div className="flex flex-col md:flex-row gap-4">
-                    <button 
-                        onClick={onRetry}
+                    <button
+                        onClick={() => window.location.reload()}
                         className="flex-1 flex items-center justify-center gap-2 py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl font-bold transition-all border border-slate-700"
                     >
                         <RefreshCcw size={18} className={isConnecting ? "animate-spin" : ""} /> Retry Access
                     </button>
-                    <button 
+                    <button
                         onClick={onLogout}
                         className="flex-1 flex items-center justify-center gap-2 py-4 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 rounded-2xl font-bold transition-all border border-rose-500/20"
                     >

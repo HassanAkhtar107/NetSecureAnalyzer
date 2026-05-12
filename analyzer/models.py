@@ -126,6 +126,7 @@ class UserDevice(models.Model):
     device_id = models.CharField(max_length=255) # Browser fingerprint or similar
     device_name = models.CharField(max_length=255)
     ip_address = models.GenericIPAddressField()
+    original_ip = models.GenericIPAddressField(null=True, blank=True)  # IP at first registration — used for VPN detection
     country = models.CharField(max_length=100, null=True, blank=True)
     location = models.CharField(max_length=255, null=True, blank=True)
     browser_info = models.TextField(null=True, blank=True)
