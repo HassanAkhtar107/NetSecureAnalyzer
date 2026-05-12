@@ -4,9 +4,7 @@ import AppLayout from './components/AppLayout';
 import Dashboard from './pages/Dashboard';
 import Devices from './pages/Devices';
 import Transfers from './pages/Transfers';
-import Firewall from './pages/Firewall';
 import Received from './pages/Received';
-import MySecurity from './pages/MySecurity';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import { NetworkProvider } from './context/NetworkContext';
@@ -20,7 +18,7 @@ function App() {
   });
 
   const [userType, setUserType] = useState(() => {
-    return localStorage.getItem('userType') || 'USER';
+    return localStorage.getItem('userType');
   });
 
   const [user, setUser] = useState(null);
@@ -64,7 +62,7 @@ function App() {
   return (
     <NetworkProvider>
       <Toaster position="top-right" theme="dark" richColors />
-      
+
       {isBlocked && (
         <BlockedModal
           deviceInfo={deviceInfo}
@@ -72,7 +70,7 @@ function App() {
           onLogout={handleLogout}
         />
       )}
-      
+
       <Router>
         <Routes>
           <Route
@@ -89,19 +87,26 @@ function App() {
               isAuthenticated ? (
                 <AppLayout user={user} onLogout={handleLogout}>
                   <Routes>
-                    <Route path="/received" element={<Received />} />
-                    <Route path="/data-transfer" element={<Transfers userType={userType} />} />
-                    <Route path="/my-security" element={<MySecurity />} />
-                    <Route path="/" element={<Dashboard userType={userType} />} />
-
-                    {userType === 'ADMIN' && (
+                    {userType === 'ADMIN' ? (
                       <>
+                        <Route path="/data-transfer" element={<Transfers userType={userType} />} />
+                        <Route path="/received" element={<Received userType={userType} />} />
+                        <Route path="/" element={<Dashboard userType={userType} />} />
                         <Route path="/devices" element={<Devices userType={userType} />} />
-                        <Route path="/firewall" element={<Firewall />} />
+                      </>
+                    ) : (
+                      <>
+                        <Route path="/" element={<Transfers userType={userType} />} />
+                        <Route path="/data-transfer" element={<Transfers userType={userType} />} />
                       </>
                     )}
 
-                    <Route path="*" element={<Navigate to="/" replace />} />
+                    <Route path="*" element={
+                      <Navigate
+                        to={userType === "ADMIN" ? "/" : "/data-transfer"}
+                        replace
+                      />
+                    } />
                   </Routes>
                 </AppLayout>
               ) : (

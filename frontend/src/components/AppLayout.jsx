@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Monitor, ArrowLeftRight, Shield, Lock, LogOut, Download, Menu, ShieldCheck, User, PanelLeft } from "lucide-react";
+import { NavLink, useNavigate } from "react-router-dom";
+import { LayoutDashboard, Monitor, ArrowLeftRight, LogOut, Download, Menu, ShieldCheck, User, PanelLeft } from "lucide-react";
 import { useNetwork } from "../context/NetworkContext";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
@@ -8,25 +8,21 @@ import { cn } from "../lib/utils";
 
 const AppLayout = ({ user, onLogout, children }) => {
   const [collapsed, setCollapsed] = useState(false);
-  const location = useLocation();
   const navigate = useNavigate();
   const {
     activeConnections,
     blockedToday,
     uptime,
-    firewallOn,
     devices,
     vpnConnected,
     vpnIP
   } = useNetwork();
 
   const navItems = [
-    { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-    { to: "/my-security", icon: ShieldCheck, label: "My Security" },
+    { to: "/", icon: LayoutDashboard, label: "Dashboard", adminOnly: true },
     { to: "/devices", icon: Monitor, label: "Devices", adminOnly: true },
-    { to: "/received", icon: Download, label: "Received Data" },
     { to: "/data-transfer", icon: ArrowLeftRight, label: "Data Transfer" },
-    { to: "/firewall", icon: Shield, label: "Firewall", adminOnly: true },
+    { to: "/received", icon: Download, label: "Received Data" },
   ];
 
   const handleLogout = () => {

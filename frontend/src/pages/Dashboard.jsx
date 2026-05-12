@@ -11,8 +11,6 @@ import { useNavigate } from 'react-router-dom';
 import { useNetwork } from '../context/NetworkContext';
 import { networksApi, devicesApi, firewallApi, userDevicesApi } from '../api';
 
-import SecurityFlow from '../components/SecurityFlow';
-
 const StatCard = ({ label, value, unit, icon: Icon, data, color }) => {
   const colorMap = {
     blue: '#3b82f6',
@@ -134,8 +132,8 @@ const Dashboard = ({ userType }) => {
     }, 3000);
 
     return () => {
-        clearInterval(interval);
-        clearInterval(poll);
+      clearInterval(interval);
+      clearInterval(poll);
     };
   }, [userType]);
 
@@ -156,18 +154,6 @@ const Dashboard = ({ userType }) => {
             <Plus className="w-4 h-4" /> Add Device
           </button>
         </div>
-      </div>
-
-      {/* Security Flow Visualization */}
-      <div className="bg-[#16191f] border border-slate-800 rounded-2xl p-6 overflow-hidden">
-        <div className="flex items-center justify-between mb-2">
-            <h3 className="font-bold text-white flex items-center gap-2">
-                <Activity size={16} className="text-sky-500" />
-                Live Security Path
-            </h3>
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Real-time Monitoring</span>
-        </div>
-        <SecurityFlow deviceInfo={currentDevice} />
       </div>
 
       {/* Quick Stats Grid */}
@@ -338,8 +324,8 @@ const Dashboard = ({ userType }) => {
                 </div>
                 <div className="flex items-center gap-4">
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${device.status === 'Active' ? "bg-blue-500/10 text-blue-500" :
-                      device.status === 'Blocked' ? "bg-red-500/10 text-red-500" :
-                        "bg-orange-500/10 text-orange-500"
+                    device.status === 'Blocked' ? "bg-red-500/10 text-red-500" :
+                      "bg-orange-500/10 text-orange-500"
                     }`}>
                     {device.status || 'Pending'}
                   </span>
