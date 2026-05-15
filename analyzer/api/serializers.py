@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from ..models import Network, Device, DataTransfer, FirewallLog, VPNServer, VPNStatus, FirewallRule, UserDevice
+from ..models import Network, Device, DataTransfer, FirewallLog, VPNServer, VPNStatus, FirewallRule, UserDevice, ImageTransfer
 
 class NetworkSerializer(serializers.ModelSerializer):
     device_count = serializers.IntegerField(read_only=True, required=False)
@@ -50,3 +50,12 @@ class UserDeviceSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserDevice
         fields = '__all__'
+
+class ImageTransferSerializer(serializers.ModelSerializer):
+    sender_email = serializers.EmailField(source='sender.email', read_only=True)
+    receiver_email = serializers.EmailField(source='receiver.email', read_only=True)
+
+    class Meta:
+        model = ImageTransfer
+        fields = ['id', 'sender', 'sender_email', 'receiver', 'receiver_email', 'image', 'timestamp', 'status']
+        read_only_fields = ['sender', 'status', 'timestamp']

@@ -152,10 +152,17 @@ class IsAdminUserType(BasePermission):
         return bool(request.user and request.user.is_authenticated and request.user.user_type == "ADMIN")
 
 class AdminUserViewSet(ModelViewSet):
-    permission_classes = [IsAuthenticated, IsAdminUserType]
+    permission_classes = [IsAuthenticated]
     authentication_classes = [TokenAuthentication]
     serializer_class = AdminUserSerializer
     queryset = User.objects.all().order_by('-id')
+
+    def get_permissions(self):
+        # Allow listing for all authenticated users so they can pick recipients
+        if self.action == 'list':
+            return [IsAuthenticated()]
+        # All other actions require Admin user_type
+        return [IsAuthenticated(), IsAdminUserType()]
 
     def get_queryset(self):
         # Exclude superusers if we only want to manage regular app users, 

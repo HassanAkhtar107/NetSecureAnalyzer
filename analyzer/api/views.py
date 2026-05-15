@@ -2,7 +2,7 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.db.models import Count
-from ..models import Network, Device, DataTransfer, FirewallLog, VPNServer, VPNStatus, FirewallRule, UserDevice
+from ..models import Network, Device, DataTransfer, FirewallLog, VPNServer, VPNStatus, FirewallRule, UserDevice, ImageTransfer
 from .serializers import (
     NetworkSerializer,
     DeviceSerializer,
@@ -11,7 +11,8 @@ from .serializers import (
     VPNServerSerializer,
     VPNStatusSerializer,
     FirewallRuleSerializer,
-    UserDeviceSerializer
+    UserDeviceSerializer,
+    ImageTransferSerializer
 )
 from ..utils import block_ip, unblock_ip, get_network_stats, simulate_transfer_stats
 
@@ -425,4 +426,18 @@ class VPNStatusViewSet(viewsets.ViewSet):
         
         return Response(VPNStatusSerializer(status_obj).data)
 
+class ImageTransferViewSet(viewsets.ModelViewSet):
+    queryset = ImageTransfer.objects.all()
+    serializer_class = ImageTransferSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
+    def get_queryset(self):
+        user = self.request.user
+        if user.user_type == 'ADMIN':
+            return ImageTransfer.objects.all().order_by('-timestamp')
+        # Return images where user is either sender or receiver
+        from django.db.models import Q
+        return ImageTransfer.objects.filter(Q(sender=user) | Q(receiver=user)).order_by('-timestamp')
+
+    def perform_create(self, serializer):
+        serializer.save(sender=self.request.user)

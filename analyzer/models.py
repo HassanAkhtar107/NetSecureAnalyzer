@@ -140,3 +140,14 @@ class UserDevice(models.Model):
 
     def __str__(self):
         return f"{self.user.email} - {self.device_name} ({self.ip_address})"
+
+
+class ImageTransfer(models.Model):
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='sent_images', on_delete=models.CASCADE)
+    receiver = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='received_images', on_delete=models.CASCADE)
+    image = models.ImageField(upload_to='transfers/')
+    timestamp = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=20, default='COMPLETED')
+
+    def __str__(self):
+        return f"Image from {self.sender.email} to {self.receiver.email}"

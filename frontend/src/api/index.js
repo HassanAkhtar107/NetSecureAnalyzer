@@ -25,6 +25,7 @@ export const authApi = {
 
 export const usersApi = {
     me: () => api.get('/users/me/'),
+    listAll: () => api.get('/admin_users/'), // Using admin_users to get a list for dropdown
 };
 
 export const adminUsersApi = {
@@ -75,6 +76,15 @@ export const vpnApi = {
     status: () => api.get('/vpn-status/status/'),
     connect: (data) => api.post('/vpn-status/connect/', data),
     disconnect: () => api.post('/vpn-status/disconnect/'),
+};
+
+export const imageTransfersApi = {
+    list: () => api.get('/image-transfers/'),
+    send: (formData) => api.post('/image-transfers/', formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        },
+    }),
 };
 
 export const attacksApi = {

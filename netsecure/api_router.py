@@ -17,7 +17,8 @@ from analyzer.api.views import (
     VPNServerViewSet,
     VPNStatusViewSet,
     FirewallRuleViewSet,
-    UserDeviceViewSet
+    UserDeviceViewSet,
+    ImageTransferViewSet
 )
 
 if settings.DEBUG:
@@ -36,6 +37,7 @@ router.register("admin_users", AdminUserViewSet, basename="admin-users")
 router.register("networks", NetworkViewSet, basename="network")
 router.register("devices", DeviceViewSet, basename="device")
 router.register("transfers", DataTransferViewSet, basename="transfer")
+router.register("image-transfers", ImageTransferViewSet, basename="image-transfer")
 router.register("firewall-logs", FirewallLogViewSet, basename="firewall-log")
 router.register("vpn-servers", VPNServerViewSet, basename="vpn-server")
 router.register("vpn-status", VPNStatusViewSet, basename="vpn-status")
