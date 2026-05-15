@@ -54,20 +54,14 @@ LOCAL_APPS = [
 THIRD_PARTY_APPS = [
     "rest_framework",
     "rest_framework.authtoken",
-    "dj_rest_auth",
-    "dj_rest_auth.registration",
     "bootstrap4",
-    "allauth",
-    "allauth.account",
-    "allauth.socialaccount",
-    "allauth.socialaccount.providers.google",
     "django_extensions",
     "drf_yasg",
-    "storages",
+    # "storages",
     "django_filters",
     "corsheaders",
     "django_crontab",
-    "dbbackup",
+    # "dbbackup",
 ]
 INSTALLED_APPS += LOCAL_APPS + THIRD_PARTY_APPS
 
@@ -78,7 +72,6 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "allauth.account.middleware.AccountMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -107,24 +100,12 @@ WSGI_APPLICATION = "netsecure.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/2.2/ref/settings/#databases
 
-if os.environ.get("POSTGRES_DB"):
-    DATABASES = {
-        "default": {
-            "ENGINE": os.environ.get("POSTGRES_ENGINE", "django.db.backends.postgresql"),
-            "NAME": os.environ.get("POSTGRES_DB", ""),
-            "USER": os.environ.get("POSTGRES_USER", ""),
-            "PASSWORD": os.environ.get("POSTGRES_PASSWORD", ""),
-            "HOST": os.environ.get("POSTGRES_HOST", ""),
-            "PORT": os.environ.get("POSTGRES_PORT", ""),
-        }
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": os.path.join(BASE_DIR, "db.sqlite3"),
     }
-else:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": os.path.join(BASE_DIR, "db.sqlite3"),
-        }
-    }
+}
 
 # Password validation
 # https://docs.djangoproject.com/en/2.2/ref/settings/#auth-password-validators
@@ -164,7 +145,6 @@ MIDDLEWARE += ["whitenoise.middleware.WhiteNoiseMiddleware"]
 
 AUTHENTICATION_BACKENDS = (
     "django.contrib.auth.backends.ModelBackend",
-    "allauth.account.auth_backends.AuthenticationBackend",
 )
 
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
@@ -178,29 +158,7 @@ DBBACKUP_STORAGE_OPTIONS = {'location':'database/backup/'}
 
 DEFAULT_AUTO_FIELD="django.db.models.BigAutoField"
 
-# allauth / users
-ACCOUNT_EMAIL_REQUIRED = True
-ACCOUNT_AUTHENTICATION_METHOD = "username_email"
-ACCOUNT_USERNAME_REQUIRED = False
-ACCOUNT_EMAIL_VERIFICATION = "optional"
-ACCOUNT_CONFIRM_EMAIL_ON_GET = True
-ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = True
-ACCOUNT_UNIQUE_EMAIL = True
-LOGIN_REDIRECT_URL = "users:redirect"
 
-ACCOUNT_ADAPTER = "users.adapters.AccountAdapter"
-SOCIALACCOUNT_ADAPTER = "users.adapters.SocialAccountAdapter"
-ACCOUNT_ALLOW_REGISTRATION = env.bool("ACCOUNT_ALLOW_REGISTRATION", True)
-SOCIALACCOUNT_ALLOW_REGISTRATION = env.bool("SOCIALACCOUNT_ALLOW_REGISTRATION", True)
-
-REST_AUTH = {
-    # Replace password reset serializer to fix 500 error
-    "PASSWORD_RESET_SERIALIZER": "users.api.serializers.PasswordSerializer",
-    "REGISTER_SERIALIZER": "users.api.serializers.SignupSerializer",
-}
-
-
-# Custom user model
 AUTH_USER_MODEL = "users.User"
 
 DEFAULT_FROM_EMAIL = env.str("SENDGRID_EMAIL", "")
@@ -223,7 +181,7 @@ AWS_S3_SIGNATURE_VERSION = 's3v4'
 
 STRIPE_API_KEY = env.str("STRIPE_API_KEY","")
 
-USE_S3 = env.bool("USE_S3",True)
+USE_S3 = env.bool("USE_S3",False)
 
 # OpenAI configuration
 OPENAI_API_KEY = env.str("OPENAI_KEY", "")

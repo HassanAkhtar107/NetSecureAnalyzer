@@ -1,4 +1,3 @@
-import stripe
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from rest_framework import status
@@ -7,11 +6,6 @@ from rest_framework.mixins import ListModelMixin, RetrieveModelMixin, UpdateMode
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 from rest_framework.viewsets import ModelViewSet, ViewSet
-from allauth.socialaccount.providers.facebook.views import FacebookOAuth2Adapter
-from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
-from allauth.socialaccount.providers.oauth2.client import OAuth2Client
-from dj_rest_auth.registration.views import SocialLoginView
-from dj_rest_auth.registration.serializers import SocialLoginSerializer
 from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.serializers import AuthTokenSerializer
 from users.models import User, UserProfile
@@ -21,10 +15,9 @@ from .serializers import (
     SignupSerializer,
     AdminUserSerializer
 )
-from rest_framework.permissions import IsAuthenticated,AllowAny
+from rest_framework.permissions import IsAuthenticated,AllowAny,BasePermission
 from rest_framework.authentication import TokenAuthentication
 from .response_messages import *
-from ..helpers import *
 
 User = get_user_model()
 
@@ -104,130 +97,13 @@ class LoginViewSet(ViewSet):
                 status=status.HTTP_200_OK,
             )
 
-        sendOtpEmail(user)
         data = {
             "token": token.key,
             "user": user_serializer.data,
         }
 
         return Response(data=data, status=status.HTTP_200_OK)
-
         
-class FacebookLogin(SocialLoginView):
-    adapter_class = FacebookOAuth2Adapter
-    serializer_class = SocialLoginSerializer
-    callback_url = "http://localhost:8000/"
-    client_class = OAuth2Client
-
-    def get_serializer(self, *args, **kwargs):
-        serializer_class = self.get_serializer_class()
-        kwargs["context"] = self.get_serializer_context()
-        return serializer_class(*args, **kwargs)
-
-
-class GoogleLogin(SocialLoginView):
-    adapter_class = GoogleOAuth2Adapter
-    serializer_class = SocialLoginSerializer
-    callback_url = "http://localhost:8000/"
-    client_class = OAuth2Client
-
-    def get_serializer(self, *args, **kwargs):
-        serializer_class = self.get_serializer_class()
-        kwargs["context"] = self.get_serializer_context()
-        return serializer_class(*args, **kwargs)
-
-
-class verifyOtpView(ViewSet):
-    permission_classes = [IsAuthenticated]
-    authentication_classes = [TokenAuthentication]
-    def list(self,request):
-        otp = self.request.GET.get("otp", None)
-        if otp is None:
-            data = {"status": "ERROR", "message": "otp is required for verification"}
-            return Response(data=data, status=status.HTTP_404_NOT_FOUND)
-        user = self.request.user
-        verify = verifyOtp(user, otp)
-        if verify == True:
-            token = Token.objects.get(user=user)
-            data = {"status": "OK", "token": token.key, "message": "email verified"}
-            return Response(data=data, status=status.HTTP_200_OK)
-
-        data = {"status": "ERROR", "message": "Invalid OTP"}
-        return Response(data=data, status=status.HTTP_400_BAD_REQUEST)
-
-
-class sendOtpView(ViewSet):
-    permission_classes = [IsAuthenticated]
-    authentication_classes = [TokenAuthentication]
-    
-    def list(self,request):
-        user = self.request.user
-        sendOtpEmail(user)
-        data = {"status": "OK", "message": "OTP is sended to registered email"}
-        return Response(data=data, status=status.HTTP_200_OK)
-
-
-class resetEmailView(ViewSet):
-    
-    def list(self,request):
-        email = self.request.GET.get("email", None)
-        if email is None:
-            data = {"status": "ERROR", "message": "email is required"}
-            return Response(data=data, status=status.HTTP_404_NOT_FOUND)
-        try:
-            user = User.objects.get(email=email)
-        except:
-            data = {"status": "ERROR", "message": "invalid email address"}
-            return Response(data=data, status=status.HTTP_404_NOT_FOUND)
-
-        sendOtpEmail(user)
-        token, created = Token.objects.get_or_create(user=user)
-        data = {
-            "status": "OK",
-            "token": token.key,
-            "message": "OTP is sended to registered email",
-            "user_type":user.user_type
-        }
-        return Response(data=data, status=status.HTTP_200_OK)
-
-
-
-class resetPasswordView(ViewSet):
-    permission_classes = [IsAuthenticated]
-    authentication_classes = [TokenAuthentication]
-    
-    def create(self,request):
-        
-        password1 = request.data.get("password1", None)
-        password2 = request.data.get("password2", None)
-
-        if password1 is None or password2 is None:
-            data = {"status": "ERROR", "message": "password1 and password2 is required"}
-            return Response(data=data, status=status.HTTP_404_NOT_FOUND)
-
-        if password1 != password2:
-            data = {
-                "status": "ERROR",
-                "message": "password1 and password2 should be same",
-            }
-            return Response(data=data, status=status.HTTP_400_BAD_REQUEST)
-
-        if len(password1) < 8:
-            data = {
-                "status": "ERROR",
-                "message": "password should be minimum of 8 characters.",
-            }
-            return Response(data=data, status=status.HTTP_400_BAD_REQUEST)
-
-        user = request.user
-        user.set_password(password1)
-        user.save()
-
-        data = {"status": "OK", "message": "Password Reset Successfullly!"}
-        return Response(data=data, status=status.HTTP_200_OK)
-
-
-
 class userProfileView(ModelViewSet):
     permission_classes = [IsAuthenticated]
     authentication_classes = [TokenAuthentication]
@@ -258,7 +134,6 @@ class userProfileView(ModelViewSet):
         data = {"status": "ok", "message": delete_response}
         return Response(data=data, status=status.HTTP_200_OK)
 
-
 class deleteUserView(ViewSet):
     permission_classes = [IsAuthenticated]
     authentication_classes = [TokenAuthentication]
@@ -269,16 +144,12 @@ class deleteUserView(ViewSet):
         data = {"status": "OK", "message": delete_response}
         return Response(data=data, status=status.HTTP_200_OK)
 
-
-from rest_framework.permissions import BasePermission
-
 class IsAdminUserType(BasePermission):
     """
     Allows access only to users with user_type == 'ADMIN'.
     """
     def has_permission(self, request, view):
         return bool(request.user and request.user.is_authenticated and request.user.user_type == "ADMIN")
-
 
 class AdminUserViewSet(ModelViewSet):
     permission_classes = [IsAuthenticated, IsAdminUserType]

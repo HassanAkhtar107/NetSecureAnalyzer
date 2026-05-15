@@ -4,10 +4,6 @@ from users.api.views import (
     UserViewSet,
     SignupViewSet,
     LoginViewSet,
-    verifyOtpView,
-    sendOtpView,
-    resetEmailView,
-    resetPasswordView,
     userProfileView,
     deleteUserView,
     AdminUserViewSet
@@ -32,10 +28,6 @@ else:
 router.register("users", UserViewSet)
 router.register("signup", SignupViewSet, basename="signup")
 router.register("login", LoginViewSet, basename="login")
-router.register("verify-otp", verifyOtpView, basename="verify-otp")
-router.register("send-otp", sendOtpView, basename="send-otp")
-router.register("reset-email", resetEmailView, basename="reset-email")
-router.register("reset-password", resetPasswordView, basename="reset-password")
 router.register("user-profile", userProfileView, basename="user-profile")
 router.register("delete-user", deleteUserView, basename="delete-user")
 router.register("admin_users", AdminUserViewSet, basename="admin-users")

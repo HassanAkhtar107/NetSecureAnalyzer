@@ -188,7 +188,7 @@ const AppLayout = ({ user, onLogout, children }) => {
                 "text-xs font-mono leading-none tracking-tighter",
                 vpnConnected ? "text-sky-400" : "text-emerald-400"
               )}>
-                {vpnIP || '0.0.0.0'}
+                {vpnIP || '-'}
               </p>
             </div>
           </div>

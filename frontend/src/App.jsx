@@ -96,8 +96,8 @@ function App() {
                       </>
                     ) : (
                       <>
-                        <Route path="/" element={<Transfers userType={userType} />} />
                         <Route path="/data-transfer" element={<Transfers userType={userType} />} />
+                        <Route path="/received" element={<Received userType={userType} />} />
                       </>
                     )}
 
