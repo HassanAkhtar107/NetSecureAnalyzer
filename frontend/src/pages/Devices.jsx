@@ -59,8 +59,6 @@ const Devices = ({ userType }) => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [selectedDevice, setSelectedDevice] = useState(null);
-  const [showAddDevice, setShowAddDevice] = useState(false);
-  const [newDevice, setNewDevice] = useState({ name: '', ip_address: '', type: 'laptop', network: '' });
   const [networks, setNetworks] = useState([]);
 
   const fetchData = async () => {
@@ -71,14 +69,6 @@ const Devices = ({ userType }) => {
         userDevicesApi.list()
       ]);
 
-      console.log("Devices Promise Status:", dRes.status);
-      console.log("Networks Promise Status:", nRes.status);
-      console.log("UserDevices Promise Status:", udRes.status);
-
-      if (udRes.status === 'rejected') {
-        console.error("UserDevices API Rejected:", udRes.reason);
-      }
-
       const safeArr = (res) => {
         if (res.status !== 'fulfilled' || !res.value?.data) return [];
         return Array.isArray(res.value.data.results) ? res.value.data.results :
@@ -87,20 +77,19 @@ const Devices = ({ userType }) => {
       let fetchedDevices = safeArr(dRes);
       let fetchedUserDevices = safeArr(udRes);
 
-      console.log("Infrastructure Devices Count:", fetchedDevices.length);
-      console.log("User Registered Devices Count:", fetchedUserDevices.length);
-
       // Combine devices, marking user-registered ones
       const combined = [
         ...fetchedDevices.map(d => ({ ...d, source: 'infrastructure' })),
-        ...fetchedUserDevices.map(d => ({
-          ...d,
-          id: `ud-${d.id}`,
-          name: d.device_name || d.user_email || 'Unnamed Device',
-          status: d.is_blocked ? 'BLOCKED' : (d.vpn_status ? 'VPN ACTIVE' : 'ACTIVE'),
-          source: 'user_registration',
-          is_approved: !d.is_blocked
-        }))
+        ...fetchedUserDevices
+          .filter(d => d.user_type !== 'ADMIN')
+          .map(d => ({
+            ...d,
+            id: `ud-${d.id}`,
+            name: d.device_name || d.user_email || 'Unnamed Device',
+            status: d.is_blocked ? 'BLOCKED' : (d.vpn_status ? 'VPN ACTIVE' : 'ACTIVE'),
+            source: 'user_registration',
+            is_approved: !d.is_blocked
+          }))
       ];
 
       setDevices(combined);
@@ -188,22 +177,6 @@ const Devices = ({ userType }) => {
     } catch (err) { toast.error("Removal failed"); }
   };
 
-  const handleAddDevice = async (e) => {
-    e.preventDefault();
-    try {
-      await devicesApi.create(newDevice);
-      toast.success("Node added to directory");
-      setShowAddDevice(false);
-      fetchData();
-    } catch (err) { toast.error("Addition failed"); }
-  };
-
-  const safeFormatDistance = (dateStr) => {
-    if (!dateStr) return 'N/A';
-    const date = new Date(dateStr);
-    return isValid(date) ? formatDistanceToNow(date, { addSuffix: true }) : 'Invalid Date';
-  };
-
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* Header */}
@@ -212,10 +185,6 @@ const Devices = ({ userType }) => {
           <h1 className="text-2xl font-bold tracking-tight text-white">Devices</h1>
           <p className="text-sm text-slate-500">Manage every node on your network: search, filter, block, and inspect.</p>
         </div>
-        <Button onClick={() => setShowAddDevice(true)} className="flex items-center gap-2">
-          <Plus size={16} />
-          Add Device
-        </Button>
       </div>
 
       {/* Summary Stats */}
@@ -276,8 +245,6 @@ const Devices = ({ userType }) => {
                 <th className="px-6 py-3">email</th>
                 <th className="px-6 py-3">Address</th>
                 <th className="px-6 py-3">Status</th>
-                <th className="px-6 py-3 text-right">Throughput</th>
-                <th className="px-6 py-3">Last Active</th>
                 <th className="px-6 py-3 w-10"></th>
               </tr>
             </thead>
@@ -320,15 +287,6 @@ const Devices = ({ userType }) => {
                         }`} />
                       {d.status}
                     </Badge>
-                    {d.source === 'user_registration' && (
-                      <Badge variant="outline" className="ml-2 text-[8px] border-slate-700 text-slate-500">External</Badge>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <p className="text-xs font-bold text-slate-300">{(d.traffic_usage || 0).toFixed(1)} Mbps</p>
-                  </td>
-                  <td className="px-6 py-4 text-xs text-slate-500">
-                    {safeFormatDistance(d.last_active)}
                   </td>
                   <td className="px-6 py-4" onClick={e => e.stopPropagation()}>
                     <DropdownMenu>
@@ -372,40 +330,6 @@ const Devices = ({ userType }) => {
           </table>
         </div>
       </Card>
-
-      {/* Side Drawer and Modals would go here (truncated for brevity but assumed functional) */}
-      {showAddDevice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-          <Card className="w-full max-w-md p-8 relative">
-            <button onClick={() => setShowAddDevice(false)} className="absolute top-4 right-4 p-2 text-slate-500 hover:text-white"><X size={20} /></button>
-            <h3 className="text-xl font-bold mb-6">Add Network Node</h3>
-            <form onSubmit={handleAddDevice} className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Device Name</label>
-                <Input required value={newDevice.name} onChange={(e) => setNewDevice({ ...newDevice, name: e.target.value })} />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-500 uppercase">IP Address</label>
-                <Input required value={newDevice.ip_address} onChange={(e) => setNewDevice({ ...newDevice, ip_address: e.target.value })} />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Type</label>
-                <Select value={newDevice.type} onValueChange={(v) => setNewDevice({ ...newDevice, type: v })}>
-                  <SelectTrigger className="bg-[#0d1117]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(typeLabels).map(([val, label]) => (
-                      <SelectItem key={val} value={val}>{label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button type="submit" className="w-full py-6 mt-4">Initialize Node</Button>
-            </form>
-          </Card>
-        </div>
-      )}
     </div>
   );
 };

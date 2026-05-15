@@ -24,8 +24,6 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Take environment variables from .env file
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/2.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = env.str("SECRET_KEY", "DEFAULT_KEY")
@@ -69,8 +67,6 @@ THIRD_PARTY_APPS = [
     "django_filters",
     "corsheaders",
     "django_crontab",
-    "django_celery_beat",
-    "django_celery_results",
     "dbbackup",
 ]
 INSTALLED_APPS += LOCAL_APPS + THIRD_PARTY_APPS
@@ -213,7 +209,7 @@ EMAIL_HOST_USER = env.str("SENDGRID_USERNAME", "")
 EMAIL_HOST_PASSWORD = env.str("SENDGRID_PASSWORD","")
 EMAIL_PORT =587
 EMAIL_USE_TLS = True
-DEFAULT_TO_ADMIN = env.str("DEFAULT_TO_ADMIN", "shehrozkapoor@kapoorsoftware.com")
+DEFAULT_TO_ADMIN = env.str("DEFAULT_TO_ADMIN", "[EMAIL_ADDRESS]")
 # AWS S3 config
 
 # AWS S3 config
@@ -281,17 +277,4 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 10240
 
 CORS_ORIGIN_ALLOW_ALL = True  # added to solve CORS
 
-
-# CELERY SETTINGS
-CELERY_BROKER_URL = env.str("REDIS_URL", default="redis://redis:6379")
-timezone = TIME_ZONE
-accept_content = ["application/json"]
-task_serializer = "json"
-cache_backend = "django-cache"
-result_extended = True
-result_backend = env.str("REDIS_URL", default="redis://redis:6379")
-RESULT_SERIALIZER = "json"
-CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
-
-# production
-BASE_URL = env.str("BASE_URL", default="redis://redis:6379")
+BASE_URL = env.str("BASE_URL", default="http://localhost:8000")

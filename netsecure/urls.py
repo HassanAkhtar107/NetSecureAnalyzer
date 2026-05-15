@@ -23,7 +23,6 @@ from drf_yasg import openapi
 from allauth.account.models import EmailAddress
 from rest_framework.authtoken.models import TokenProxy
 from allauth.socialaccount.models import SocialToken, SocialAccount, SocialApp
-from django_celery_beat.models import ClockedSchedule, SolarSchedule, IntervalSchedule
 from django.contrib.sites.models import Site
 from django.contrib.auth.models import Group
 
@@ -32,9 +31,6 @@ try:
     admin.site.unregister(SocialToken)
     admin.site.unregister(SocialAccount)
     admin.site.unregister(SocialApp)
-    admin.site.unregister(ClockedSchedule)
-    admin.site.unregister(SolarSchedule)
-    admin.site.unregister(IntervalSchedule)
     admin.site.unregister(Site)
     admin.site.unregister(Group)
 except admin.sites.NotRegistered:
@@ -45,16 +41,11 @@ urlpatterns = [
     path("api/", include("netsecure.api_router")),
 ]
 
-# urlpatterns.append(path("api/improve-text/", improve_text_view, name="improve-text"))
-admin.site.site_header = "Kapoor Software Solutions"
-admin.site.site_title = "Kapoor Software Solutions Admin Portal"
-admin.site.index_title = "Kapoor Software Solutions Admin"
-
 # swagger
 api_info = openapi.Info(
-    title="Kapoor Software Solutions API",
+    title="Net Secure Analyzer API",
     default_version="v1",
-    description="API documentation for Kapoor Software Solutions App",
+    description="API documentation for Net Secure Analyzer App",
 )
 
 schema_view = get_schema_view(

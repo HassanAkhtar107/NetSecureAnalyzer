@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: ./compose/local/django/Dockerfile
-    image: docugen_web
+    image: netsecureanalyzer
     command: /start
     # this volume is used to map the files and folders on the host to the container
     # so if we change code on the host, code in the docker container will also be changed
@@ -21,10 +21,7 @@ services:
       - db
 
   db:
-    build:
-      context: .
-      dockerfile: ./compose/production/postgres/Dockerfile
-    image: docugen_postgres
+    image: postgres:14
     ports:
       - "5432:5432"
     volumes:
@@ -35,50 +32,6 @@ services:
 
   redis:
     image: redis:latest
-
-  celery_worker:
-    build:
-      context: .
-      dockerfile: ./compose/local/django/Dockerfile
-    image: docugen_celery_worker
-    command: /start-celeryworker
-    volumes:
-      - .:/app
-    env_file:
-      - ./.env
-    depends_on:
-      - redis
-      - db
-
-  celery_beat:
-    build:
-      context: .
-      dockerfile: ./compose/local/django/Dockerfile
-    image: docugen_celery_beat
-    command: /start-celerybeat
-    volumes:
-      - .:/app
-    env_file:
-      - ./.env
-    depends_on:
-      - redis
-      - db
-
-  flower:
-    build:
-      context: .
-      dockerfile: ./compose/local/django/Dockerfile
-    image: docugen_celery_flower
-    command: /start-flower
-    volumes:
-      - .:/app
-    env_file:
-      - ./.env
-    ports:
-      - 5555:5555
-    depends_on:
-      - redis
-      - db
 
 volumes:
   postgres_data:

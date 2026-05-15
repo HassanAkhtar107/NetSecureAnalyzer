@@ -46,6 +46,7 @@ class FirewallRuleSerializer(serializers.ModelSerializer):
 
 class UserDeviceSerializer(serializers.ModelSerializer):
     user_email = serializers.EmailField(source='user.email', read_only=True)
+    user_type = serializers.CharField(source='user.user_type', read_only=True)
     class Meta:
         model = UserDevice
         fields = '__all__'
