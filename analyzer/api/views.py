@@ -43,20 +43,19 @@ class UserDeviceViewSet(viewsets.ModelViewSet):
 
         current_ip = ip_address or request.META.get('REMOTE_ADDR')
 
-        device, created = UserDevice.objects.get_or_create(
-            user=user,
-            device_id=device_id,
-            defaults={
-                'device_name': device_name,
-                'ip_address': current_ip,
-                'original_ip': current_ip,  # Save the first-seen IP permanently
-                'browser_info': browser_info,
-                'country': country,
-                'vpn_status': False
-            }
-        )
-
-        if not created:
+        # Query existing devices for this user, sorted by latest active
+        existing_devices = UserDevice.objects.filter(user=user).order_by('-last_active')
+        
+        if existing_devices.exists():
+            device = existing_devices[0]
+            created = False
+            # Clean up any duplicate records that might exist in the database for this user
+            if existing_devices.count() > 1:
+                UserDevice.objects.filter(user=user).exclude(id=device.id).delete()
+            
+            # Update the device information
+            device.device_id = device_id
+            device.device_name = device_name
             device.ip_address = current_ip
             device.browser_info = browser_info
             if country:
@@ -64,6 +63,18 @@ class UserDeviceViewSet(viewsets.ModelViewSet):
             # If original_ip was never set (old records), set it now
             if not device.original_ip:
                 device.original_ip = current_ip
+        else:
+            device = UserDevice.objects.create(
+                user=user,
+                device_id=device_id,
+                device_name=device_name,
+                ip_address=current_ip,
+                original_ip=current_ip,
+                browser_info=browser_info,
+                country=country,
+                vpn_status=False
+            )
+            created = True
 
         # Server-side VPN detection: if current IP differs from original IP, VPN is active
         is_vpn_active = bool(device.original_ip and current_ip != device.original_ip)
@@ -136,6 +147,37 @@ class UserDeviceViewSet(viewsets.ModelViewSet):
         )
         
         return Response({"status": "Device unblocked"})
+
+    def destroy(self, request, *args, **kwargs):
+        device = self.get_object()
+        user = device.user
+        
+        # Call standard destroy to delete UserDevice
+        response = super().destroy(request, *args, **kwargs)
+        
+        # Delete user and all their dependencies if they are not an ADMIN
+        if user and user.user_type != 'ADMIN':
+            from users.models import UserProfile
+            from analyzer.models import VPNStatus, ImageTransfer, DataTransfer
+            from rest_framework.authtoken.models import Token
+            
+            UserProfile.objects.filter(user=user).delete()
+            VPNStatus.objects.filter(user=user).delete()
+            ImageTransfer.objects.filter(sender=user).delete()
+            ImageTransfer.objects.filter(receiver=user).delete()
+            DataTransfer.objects.filter(created_by=user).delete()
+            Token.objects.filter(user=user).delete()
+            
+            # Clean up residual database constraints via raw cursor
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute("DELETE FROM account_emailconfirmation WHERE email_address_id IN (SELECT id FROM account_emailaddress WHERE user_id = %s)", [user.id])
+                cursor.execute("DELETE FROM account_emailaddress WHERE user_id = %s", [user.id])
+                cursor.execute("DELETE FROM django_admin_log WHERE user_id = %s", [user.id])
+                
+            user.delete()
+            
+        return response
 
 class NetworkViewSet(viewsets.ModelViewSet):
     queryset = Network.objects.all()
@@ -233,28 +275,11 @@ class DeviceViewSet(viewsets.ModelViewSet):
         return Response({"status": "Device unblocked"})
 
     @action(detail=True, methods=['post'])
-    def approve(self, request, pk=None):
-        if request.user.user_type != 'ADMIN':
-            return Response({"error": "Only admins can approve devices"}, status=status.HTTP_403_FORBIDDEN)
-        device = self.get_object()
-        device.status = 'ACTIVE'
-        device.is_approved = True
-        device.save()
-        
-        FirewallLog.objects.create(
-            action='ALLOW',
-            source_ip=device.ip_address,
-            reason="Device join request approved"
-        )
-        return Response({"status": "Device approved"})
-
-    @action(detail=True, methods=['post'])
     def deny(self, request, pk=None):
         if request.user.user_type != 'ADMIN':
             return Response({"error": "Only admins can deny devices"}, status=status.HTTP_403_FORBIDDEN)
         device = self.get_object()
         device.status = 'BLOCKED'
-        device.is_approved = False
         device.save()
         
         # Also block IP in firewall as per SRS (Denying a join request blocks future attempts)

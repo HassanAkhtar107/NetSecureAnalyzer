@@ -18,9 +18,10 @@ from .serializers import (
 from rest_framework.permissions import IsAuthenticated,AllowAny,BasePermission
 from rest_framework.authentication import TokenAuthentication
 from .response_messages import *
+from analyzer.models import VPNStatus, ImageTransfer, DataTransfer, UserDevice
+from django.db import connection
 
 User = get_user_model()
-
 
 class UserViewSet(RetrieveModelMixin, ListModelMixin, UpdateModelMixin, GenericViewSet):
     serializer_class = UserSerializer
@@ -168,3 +169,23 @@ class AdminUserViewSet(ModelViewSet):
         # Exclude superusers if we only want to manage regular app users, 
         # or just return all users. Let's return all users for now.
         return super().get_queryset()
+
+    def destroy(self, request, *args, **kwargs):
+        user = self.get_object()
+        
+        UserProfile.objects.filter(user=user).delete()
+        UserDevice.objects.filter(user=user).delete()
+        VPNStatus.objects.filter(user=user).delete()
+        ImageTransfer.objects.filter(sender=user).delete()
+        ImageTransfer.objects.filter(receiver=user).delete()
+        DataTransfer.objects.filter(created_by=user).delete()
+        Token.objects.filter(user=user).delete()
+        
+        # Clean up residual database constraints via raw cursor
+        with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM account_emailconfirmation WHERE email_address_id IN (SELECT id FROM account_emailaddress WHERE user_id = %s)", [user.id])
+            cursor.execute("DELETE FROM account_emailaddress WHERE user_id = %s", [user.id])
+            cursor.execute("DELETE FROM django_admin_log WHERE user_id = %s", [user.id])
+            
+        # Safely delete user using standard django destroy
+        return super().destroy(request, *args, **kwargs)

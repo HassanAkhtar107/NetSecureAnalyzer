@@ -16,12 +16,10 @@ class Device(models.Model):
     STATUS_CHOICES = (
         ('ACTIVE', 'Active'),
         ('BLOCKED', 'Blocked'),
-        ('PENDING', 'Pending'),
     )
     ip_address = models.GenericIPAddressField()
     network = models.ForeignKey(Network, on_delete=models.CASCADE, related_name='devices')
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='PENDING')
-    is_approved = models.BooleanField(default=False)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='ACTIVE')
     data_usage = models.FloatField(default=0.0, help_text="Data usage in MB")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

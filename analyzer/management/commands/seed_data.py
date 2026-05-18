@@ -24,28 +24,7 @@ class Command(BaseCommand):
         net2, _ = Network.objects.get_or_create(name='User Network A', range_cidr='192.168.2.0/24')
         net3, _ = Network.objects.get_or_create(name='IoT Network', range_cidr='10.0.0.0/24')
 
-        # # 3. Create Devices
-        # devices_data = [
-        #     {'ip': '192.168.1.10', 'name': 'Admin Workstation', 'net': net1, 'status': 'ACTIVE', 'approved': True},
-        #     {'ip': '192.168.1.11', 'name': 'Primary Server', 'net': net1, 'status': 'ACTIVE', 'approved': True},
-        #     {'ip': '192.168.2.15', 'name': 'User PC 01', 'net': net2, 'status': 'ACTIVE', 'approved': True},
-        #     {'ip': '192.168.2.20', 'name': 'User PC 02', 'net': net2, 'status': 'PENDING', 'approved': False},
-        #     {'ip': '10.0.0.5', 'name': 'Smart Camera', 'net': net3, 'status': 'BLOCKED', 'approved': False},
-        #     {'ip': '10.0.0.8', 'name': 'IoT Gateway', 'net': net3, 'status': 'ACTIVE', 'approved': True},
-        # ]
-        
-        # for d in devices_data:
-        #     Device.objects.get_or_create(
-        #         ip_address=d['ip'],
-        #         defaults={
-        #             'network': d['net'],
-        #             'status': d['status'],
-        #             'is_approved': d['approved'],
-        #             'data_usage': 1240.5 if d['approved'] else 0
-        #         }
-        #     )
-
-        # 4. Create VPN Servers
+        # 3. Create VPN Servers
         vpn_data = [
             {'name': 'New York City', 'country': 'USA', 'ip': '103.86.131.5', 'lat': 23},
             {'name': 'Frankfurt', 'country': 'Germany', 'ip': '185.2.14.3', 'lat': 48},

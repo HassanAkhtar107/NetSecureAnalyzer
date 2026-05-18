@@ -45,8 +45,8 @@ export const devicesApi = {
     list: () => api.get('/devices/'),
     block: (id) => api.post(`/devices/${id}/block/`),
     unblock: (id) => api.post(`/devices/${id}/unblock/`),
-    approve: (id) => api.post(`/devices/${id}/approve/`),
     deny: (id) => api.post(`/devices/${id}/deny/`),
+    delete: (id) => api.delete(`/devices/${id}/`),
 };
 
 export const userDevicesApi = {

@@ -8,8 +8,8 @@ class NetworkAdmin(admin.ModelAdmin):
 
 @admin.register(Device)
 class DeviceAdmin(admin.ModelAdmin):
-    list_display = ('ip_address', 'network', 'status', 'is_approved')
-    list_filter = ('status', 'is_approved', 'network')
+    list_display = ('ip_address', 'network', 'status')
+    list_filter = ('status', 'network')
     search_fields = ('ip_address',)
 
 @admin.register(DataTransfer)

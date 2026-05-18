@@ -17,8 +17,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('ip_address', models.GenericIPAddressField()),
-                ('status', models.CharField(choices=[('ACTIVE', 'Active'), ('BLOCKED', 'Blocked'), ('PENDING', 'Pending')], default='PENDING', max_length=10)),
-                ('is_approved', models.BooleanField(default=False)),
+                ('status', models.CharField(choices=[('ACTIVE', 'Active'), ('BLOCKED', 'Blocked')], default='ACTIVE', max_length=10)),
                 ('data_usage', models.FloatField(default=0.0, help_text='Data usage in MB')),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
