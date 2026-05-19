@@ -12,7 +12,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 
 const Transfers = ({ userType }) => {
   const [users, setUsers] = useState([]);
-  console.log("users--->", users);
   const [transfers, setTransfers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);

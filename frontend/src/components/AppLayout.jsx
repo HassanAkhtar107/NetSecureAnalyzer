@@ -172,7 +172,7 @@ const AppLayout = ({ user, onLogout, children }) => {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-3 pl-2">
               <div className="flex flex-col items-end hidden sm:flex">
-                <span className="text-xs font-bold text-white leading-none mb-2">{user?.name ? user?.name : user?.email || ''}</span>
+                <span className="text-xs font-bold text-white leading-none mb-2">{user?.email ? user?.email : user?.name || ''}</span>
                 <Badge variant="success" className="h-4 px-1.5 text-[9px] font-bold uppercase tracking-widest border-emerald-500/20">
                   {user?.user_type === 'ADMIN' ? 'Admin' : 'User'}
                 </Badge>
