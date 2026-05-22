@@ -27,10 +27,12 @@ const Transfers = ({ userType }) => {
   const fetchData = async () => {
     setLoading(true);
 
+    let meData = currentUser;
     // 1. Get current user profile
     try {
       const meRes = await usersApi.me();
-      setCurrentUser(meRes.data);
+      meData = meRes.data;
+      setCurrentUser(meData);
     } catch (err) {
       console.error("Profile fetch error:", err);
     }
@@ -48,7 +50,7 @@ const Transfers = ({ userType }) => {
       }
 
       const otherUsers = userData.filter(u => {
-        const isNotSelf = currentUser ? u.id !== currentUser.id : true;
+        const isNotSelf = meData ? u.id !== meData.id : true;
         const isNotAdmin = u.user_type !== 'ADMIN';
         return isNotSelf && isNotAdmin;
       });
@@ -74,15 +76,6 @@ const Transfers = ({ userType }) => {
     const interval = setInterval(fetchData, 8000);
     return () => clearInterval(interval);
   }, []);
-
-  // Effect to re-run filtering when currentUser is set
-  useEffect(() => {
-    if (currentUser && users.length > 0) {
-      const otherUsers = users.filter(u => u.id !== currentUser.id);
-      // We don't want to trigger infinite loops, so we only update if it actually changes
-      // Actually, it's better to just use currentUserId inside the users filter in fetchData
-    }
-  }, [currentUser]);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];

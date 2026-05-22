@@ -143,7 +143,7 @@ class UserDevice(models.Model):
 class ImageTransfer(models.Model):
     sender = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='sent_images', on_delete=models.CASCADE)
     receiver = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='received_images', on_delete=models.CASCADE)
-    image = models.ImageField(upload_to='transfers/')
+    image = models.ImageField(upload_to='images/')
     timestamp = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, default='COMPLETED')
 
