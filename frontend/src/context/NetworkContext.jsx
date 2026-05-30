@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { networksApi, devicesApi, firewallApi, vpnApi, userDevicesApi, adminUsersApi } from '../api';
+import { networksApi, firewallApi, vpnApi, userDevicesApi, adminUsersApi } from '../api';
 
 const NetworkContext = createContext(undefined);
 
@@ -15,8 +15,7 @@ export const NetworkProvider = ({ children }) => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [devRes, vpnRes, udRes, uRes] = await Promise.allSettled([
-          devicesApi.list(),
+        const [vpnRes, udRes, uRes] = await Promise.allSettled([
           vpnApi.status(),
           userDevicesApi.list(),
           adminUsersApi.list()
@@ -28,7 +27,6 @@ export const NetworkProvider = ({ children }) => {
             Array.isArray(res.value.data) ? res.value.data : [];
         };
 
-        let fetchedDevices = safeArr(devRes);
         let fetchedUserDevices = safeArr(udRes);
         let fetchedUsers = safeArr(uRes);
 
@@ -62,11 +60,6 @@ export const NetworkProvider = ({ children }) => {
 
         // Combine devices, marking user-registered ones and placeholders
         const combined = [
-          ...fetchedDevices.map(d => ({
-            ...d,
-            source: 'infrastructure',
-            status: d.status || 'ACTIVE'
-          })),
           ...fetchedUserDevices
             .filter(d => d.user_type !== 'ADMIN')
             .map(d => ({

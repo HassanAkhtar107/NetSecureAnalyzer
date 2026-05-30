@@ -42,7 +42,7 @@ def get_network_stats(network_id=None):
     Returns real-time network usage stats using psutil.
     Calculates actual system speed by comparing consecutive readings.
     """
-    from .models import Device, Network, UserDevice
+    from .models import Network, UserDevice
     global _last_stats
     import random
     
@@ -59,8 +59,8 @@ def get_network_stats(network_id=None):
                 diff_sent = net_io.bytes_sent - _last_stats['bytes_sent']
                 
                 # Formula: bytes * 8 (bits) / 1024^2 (Mb) / seconds
-                _last_stats['download_speed'] = max(0.1, round((diff_recv * 8) / (1024 * 1024 * elapsed), 2))
-                _last_stats['upload_speed'] = max(0.1, round((diff_sent * 8) / (1024 * 1024 * elapsed), 2))
+                _last_stats['download_speed'] = max(0.0, round((diff_recv * 8) / (1024 * 1024 * elapsed), 2))
+                _last_stats['upload_speed'] = max(0.0, round((diff_sent * 8) / (1024 * 1024 * elapsed), 2))
         
         _last_stats['time'] = current_time
         _last_stats['bytes_sent'] = net_io.bytes_sent
@@ -79,13 +79,13 @@ def get_network_stats(network_id=None):
     packet_loss = round(random.uniform(0.01, 0.05), 3)
 
     # Use combined unique devices in the DB for accurate counts
-    device_count = Device.objects.count() + UserDevice.objects.count()
-    blocked_count = Device.objects.filter(status='BLOCKED').count() + UserDevice.objects.filter(is_blocked=True).count()
+    device_count = UserDevice.objects.count()
+    blocked_count = UserDevice.objects.filter(is_blocked=True).count()
 
     if network_id:
         # Mock network-specific device counts
-        net_device_count = Device.objects.filter(network_id=network_id).count()
-        net_blocked_count = Device.objects.filter(network_id=network_id, status='BLOCKED').count()
+        net_device_count = UserDevice.objects.filter(user__assigned_network_id=network_id).count()
+        net_blocked_count = UserDevice.objects.filter(user__assigned_network_id=network_id, is_blocked=True).count()
         
         return {
             "total_data_usage": round((net_io.bytes_sent + net_io.bytes_recv) / (1024 * 1024), 2) if 'net_io' in locals() else 142.5,

@@ -41,13 +41,7 @@ export const networksApi = {
     myStats: () => api.get('/networks/my_network_stats/'),
 };
 
-export const devicesApi = {
-    list: () => api.get('/devices/'),
-    block: (id) => api.post(`/devices/${id}/block/`),
-    unblock: (id) => api.post(`/devices/${id}/unblock/`),
-    deny: (id) => api.post(`/devices/${id}/deny/`),
-    delete: (id) => api.delete(`/devices/${id}/`),
-};
+
 
 export const userDevicesApi = {
     list: () => api.get('/user-devices/'),
@@ -57,10 +51,7 @@ export const userDevicesApi = {
     delete: (id) => api.delete(`/user-devices/${id}/`),
 };
 
-export const transfersApi = {
-    list: () => api.get('/transfers/'),
-    create: (data) => api.post('/transfers/', data),
-};
+
 
 export const firewallApi = {
     logs: () => api.get('/firewall-logs/'),
@@ -72,7 +63,6 @@ export const firewallApi = {
 };
 
 export const vpnApi = {
-    list: () => api.get('/vpn-servers/'),
     status: () => api.get('/vpn-status/status/'),
     connect: (data) => api.post('/vpn-status/connect/', data),
     disconnect: () => api.post('/vpn-status/disconnect/'),

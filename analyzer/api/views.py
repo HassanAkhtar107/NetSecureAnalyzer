@@ -1,20 +1,20 @@
+from users.models import UserProfile
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.db.models import Count
-from ..models import Network, Device, DataTransfer, FirewallLog, VPNServer, VPNStatus, FirewallRule, UserDevice, ImageTransfer
+from ..models import Network, FirewallLog, VPNStatus, FirewallRule, UserDevice, ImageTransfer
 from .serializers import (
     NetworkSerializer,
-    DeviceSerializer,
-    DataTransferSerializer,
     FirewallLogSerializer,
-    VPNServerSerializer,
     VPNStatusSerializer,
     FirewallRuleSerializer,
     UserDeviceSerializer,
     ImageTransferSerializer
 )
 from ..utils import block_ip, unblock_ip, get_network_stats, simulate_transfer_stats
+from analyzer.models import VPNStatus, ImageTransfer
+from rest_framework.authtoken.models import Token
 
 # ... (previous ViewSets)
 
@@ -157,15 +157,10 @@ class UserDeviceViewSet(viewsets.ModelViewSet):
         
         # Delete user and all their dependencies if they are not an ADMIN
         if user and user.user_type != 'ADMIN':
-            from users.models import UserProfile
-            from analyzer.models import VPNStatus, ImageTransfer, DataTransfer
-            from rest_framework.authtoken.models import Token
-            
             UserProfile.objects.filter(user=user).delete()
             VPNStatus.objects.filter(user=user).delete()
             ImageTransfer.objects.filter(sender=user).delete()
             ImageTransfer.objects.filter(receiver=user).delete()
-            DataTransfer.objects.filter(created_by=user).delete()
             Token.objects.filter(user=user).delete()
             
             # Clean up residual database constraints via raw cursor
@@ -187,8 +182,8 @@ class NetworkViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if user.user_type == 'ADMIN':
-            return Network.objects.annotate(device_count=Count('devices'))
-        return Network.objects.filter(id=user.assigned_network_id).annotate(device_count=Count('devices'))
+            return Network.objects.annotate(device_count=Count('users__user_devices', distinct=True))
+        return Network.objects.filter(id=user.assigned_network_id).annotate(device_count=Count('users__user_devices', distinct=True))
 
     @action(detail=False, methods=['get'])
     def global_stats(self, request):
@@ -225,122 +220,7 @@ class NetworkViewSet(viewsets.ModelViewSet):
         )
         return Response({"status": "success", "firewall_enabled": enabled})
 
-class DeviceViewSet(viewsets.ModelViewSet):
-    queryset = Device.objects.all()
-    serializer_class = DeviceSerializer
-    permission_classes = [permissions.IsAuthenticated]
 
-    def get_queryset(self):
-        user = self.request.user
-        if user.user_type == 'ADMIN':
-            return Device.objects.all()
-        if user.assigned_network:
-            return Device.objects.filter(network=user.assigned_network)
-        return Device.objects.none()
-
-    @action(detail=True, methods=['post'])
-    def block(self, request, pk=None):
-        if request.user.user_type != 'ADMIN':
-            return Response({"error": "Only admins can block devices"}, status=status.HTTP_403_FORBIDDEN)
-        device = self.get_object()
-        device.status = 'BLOCKED'
-        device.save()
-        
-        # Windows Firewall Integration
-        block_ip(device.ip_address)
-        
-        FirewallLog.objects.create(
-            action='BLOCK',
-            source_ip=device.ip_address,
-            reason="Blocked by admin"
-        )
-        return Response({"status": "Device blocked"})
-
-    @action(detail=True, methods=['post'])
-    def unblock(self, request, pk=None):
-        if request.user.user_type != 'ADMIN':
-            return Response({"error": "Only admins can unblock devices"}, status=status.HTTP_403_FORBIDDEN)
-        device = self.get_object()
-        device.status = 'ACTIVE'
-        device.save()
-        
-        # Windows Firewall Integration
-        unblock_ip(device.ip_address)
-        
-        FirewallLog.objects.create(
-            action='ALLOW',
-            source_ip=device.ip_address,
-            reason="Unblocked by admin"
-        )
-        return Response({"status": "Device unblocked"})
-
-    @action(detail=True, methods=['post'])
-    def deny(self, request, pk=None):
-        if request.user.user_type != 'ADMIN':
-            return Response({"error": "Only admins can deny devices"}, status=status.HTTP_403_FORBIDDEN)
-        device = self.get_object()
-        device.status = 'BLOCKED'
-        device.save()
-        
-        # Also block IP in firewall as per SRS (Denying a join request blocks future attempts)
-        block_ip(device.ip_address)
-        
-        FirewallLog.objects.create(
-            action='BLOCK',
-            source_ip=device.ip_address,
-            reason="Device join request denied"
-        )
-        return Response({"status": "Device denied"})
-
-class DataTransferViewSet(viewsets.ModelViewSet):
-    queryset = DataTransfer.objects.all()
-    serializer_class = DataTransferSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        user = self.request.user
-        if user.user_type == 'ADMIN':
-            return DataTransfer.objects.all().order_by('-timestamp')
-        return DataTransfer.objects.filter(created_by=user).order_by('-timestamp')
-
-    def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
-
-    def create(self, request, *args, **kwargs):
-        sender_id = request.data.get('sender_device')
-        receiver_id = request.data.get('receiver_device')
-        
-        try:
-            sender = Device.objects.get(id=sender_id)
-            receiver = Device.objects.get(id=receiver_id)
-        except Device.DoesNotExist:
-            return Response({"error": "Device not found"}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Check if they are in the same network
-        if sender.network != receiver.network:
-            return Response({"error": "Transfer only allowed within the same network"}, status=status.HTTP_403_FORBIDDEN)
-
-        # Security Check: Firewall must be ON for BOTH networks to allow transfers
-        # (Assuming 'firewall_enabled' means 'Allowed to operate'. If false, network is 'Blocked')
-        if not sender.network.firewall_enabled or not receiver.network.firewall_enabled:
-             return Response({"error": "Firewall Policy Violation: One or both networks are restricted by the Firewall."}, status=status.HTTP_403_FORBIDDEN)
-
-        # Check if any device is blocked
-        if sender.status == 'BLOCKED' or receiver.status == 'BLOCKED':
-            return Response({"error": "Cannot transfer. One or both devices are blocked"}, status=status.HTTP_403_FORBIDDEN)
-
-        # Inject simulated stats for realism if requested
-        if 'simulate' in request.data:
-            sim_stats = simulate_transfer_stats()
-            for key, val in sim_stats.items():
-                if key != 'eta':
-                    request.data[key] = val
-
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
-        headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
 class FirewallLogViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = FirewallLog.objects.all().order_by('-timestamp')
@@ -369,15 +249,7 @@ class FirewallRuleViewSet(viewsets.ModelViewSet):
         rule.save()
         return Response({"status": "success", "is_active": rule.is_active})
 
-class VPNServerViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = VPNServer.objects.all()
-    serializer_class = VPNServerSerializer
-    permission_classes = [permissions.IsAuthenticated]
 
-    def get_queryset(self):
-        if self.request.user.user_type == 'ADMIN':
-            return VPNServer.objects.all()
-        return VPNServer.objects.filter(is_active=True, is_private=False)
 
 class VPNStatusViewSet(viewsets.ViewSet):
     permission_classes = [permissions.IsAuthenticated]
@@ -401,13 +273,9 @@ class VPNStatusViewSet(viewsets.ViewSet):
     def connect(self, request):
         country = request.data.get('country')
         
-        # If no country selected, pick the "best" (lowest latency) active public server
+        # If no country selected, default to 'USA'
         if not country:
-            best_server = VPNServer.objects.filter(is_active=True, is_private=False).order_by('latency').first()
-            if best_server:
-                country = best_server.country
-            else:
-                country = 'USA' # Default fallback
+            country = 'USA'
         
         status_obj, created = VPNStatus.objects.get_or_create(user=request.user)
         status_obj.is_active = True

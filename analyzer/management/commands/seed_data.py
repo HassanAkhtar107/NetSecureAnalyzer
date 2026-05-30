@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from analyzer.models import Network, Device, VPNServer, FirewallLog
+from analyzer.models import Network, FirewallLog
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -24,19 +24,7 @@ class Command(BaseCommand):
         net2, _ = Network.objects.get_or_create(name='User Network A', range_cidr='192.168.2.0/24')
         net3, _ = Network.objects.get_or_create(name='IoT Network', range_cidr='10.0.0.0/24')
 
-        # 3. Create VPN Servers
-        vpn_data = [
-            {'name': 'New York City', 'country': 'USA', 'ip': '103.86.131.5', 'lat': 23},
-            {'name': 'Frankfurt', 'country': 'Germany', 'ip': '185.2.14.3', 'lat': 48},
-            {'name': 'Tokyo', 'country': 'Japan', 'ip': '103.86.135.1', 'lat': 55},
-            {'name': 'London', 'country': 'UK', 'ip': '89.41.182.2', 'lat': 35},
-            {'name': 'Singapore', 'country': 'Singapore', 'ip': '103.86.133.2', 'lat': 62},
-        ]
-        for v in vpn_data:
-            VPNServer.objects.get_or_create(
-                name=v['name'],
-                defaults={'country': v['country'], 'ip_address': v['ip'], 'latency': v['lat']}
-            )
+
 
         # 5. Create Firewall Logs
         log_data = [

@@ -5,7 +5,7 @@ import {
   Activity, Globe, UserPlus, User, Network, Server, Info, Clock, AlertTriangle, Loader2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { adminUsersApi, networksApi, devicesApi, transfersApi, userDevicesApi } from '../api';
+import { adminUsersApi, networksApi, userDevicesApi } from '../api';
 import { toast } from 'sonner';
 import { formatDistanceToNow, isValid } from 'date-fns';
 import { cn } from '../lib/utils';
@@ -64,8 +64,7 @@ const Devices = ({ userType }) => {
 
   const fetchData = async () => {
     try {
-      const [dRes, nRes, udRes, uRes] = await Promise.allSettled([
-        devicesApi.list(),
+      const [nRes, udRes, uRes] = await Promise.allSettled([
         networksApi.list(),
         userDevicesApi.list(),
         adminUsersApi.list()
@@ -76,7 +75,6 @@ const Devices = ({ userType }) => {
         return Array.isArray(res.value.data.results) ? res.value.data.results :
           Array.isArray(res.value.data) ? res.value.data : [];
       };
-      let fetchedDevices = safeArr(dRes);
       let fetchedUserDevices = safeArr(udRes);
       let fetchedUsers = safeArr(uRes);
 
@@ -110,7 +108,6 @@ const Devices = ({ userType }) => {
 
       // Combine devices, marking user-registered ones and placeholders
       const combined = [
-        ...fetchedDevices.map(d => ({ ...d, source: 'infrastructure' })),
         ...fetchedUserDevices
           .filter(d => d.user_type !== 'ADMIN')
           .map(d => ({
@@ -204,12 +201,8 @@ const Devices = ({ userType }) => {
 
   const handleBlock = async (device) => {
     try {
-      if (device.source === 'user_registration') {
-        const id = device.id.replace('ud-', '');
-        await userDevicesApi.block(id);
-      } else {
-        await devicesApi.block(device.id);
-      }
+      const id = device.id.replace('ud-', '');
+      await userDevicesApi.block(id);
       toast.success("Access restricted");
       fetchData();
     } catch (err) { toast.error("Action failed"); }
@@ -217,12 +210,8 @@ const Devices = ({ userType }) => {
 
   const handleUnblock = async (device) => {
     try {
-      if (device.source === 'user_registration') {
-        const id = device.id.replace('ud-', '');
-        await userDevicesApi.unblock(id);
-      } else {
-        await devicesApi.unblock(device.id);
-      }
+      const id = device.id.replace('ud-', '');
+      await userDevicesApi.unblock(id);
       toast.success("Access restored");
       fetchData();
     } catch (err) { toast.error("Action failed"); }
@@ -230,19 +219,14 @@ const Devices = ({ userType }) => {
 
   const handleRemove = async (device) => {
     try {
-      if (device.source === 'user_registration') {
-        const id = String(device.id).replace('ud-', '');
-        if (id.startsWith('u-placeholder-')) {
-          const userId = id.replace('u-placeholder-', '');
-          await adminUsersApi.delete(userId);
-          toast.success("User removed from system");
-        } else {
-          await userDevicesApi.delete(id);
-          toast.success("User and registered device removed");
-        }
+      const id = String(device.id).replace('ud-', '');
+      if (id.startsWith('u-placeholder-')) {
+        const userId = id.replace('u-placeholder-', '');
+        await adminUsersApi.delete(userId);
+        toast.success("User removed from system");
       } else {
-        await devicesApi.delete(device.id);
-        toast.success("Infrastructure node removed");
+        await userDevicesApi.delete(id);
+        toast.success("User and registered device removed");
       }
       fetchData();
     } catch (err) {

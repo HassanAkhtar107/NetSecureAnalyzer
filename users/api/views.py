@@ -18,7 +18,7 @@ from .serializers import (
 from rest_framework.permissions import IsAuthenticated,AllowAny,BasePermission
 from rest_framework.authentication import TokenAuthentication
 from .response_messages import *
-from analyzer.models import VPNStatus, ImageTransfer, DataTransfer, UserDevice
+from analyzer.models import VPNStatus, ImageTransfer, UserDevice
 from django.db import connection
 
 User = get_user_model()
@@ -178,7 +178,6 @@ class AdminUserViewSet(ModelViewSet):
         VPNStatus.objects.filter(user=user).delete()
         ImageTransfer.objects.filter(sender=user).delete()
         ImageTransfer.objects.filter(receiver=user).delete()
-        DataTransfer.objects.filter(created_by=user).delete()
         Token.objects.filter(user=user).delete()
         
         # Clean up residual database constraints via raw cursor

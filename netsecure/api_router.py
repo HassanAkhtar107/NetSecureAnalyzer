@@ -11,10 +11,7 @@ from users.api.views import (
 
 from analyzer.api.views import (
     NetworkViewSet,
-    DeviceViewSet,
-    DataTransferViewSet,
     FirewallLogViewSet,
-    VPNServerViewSet,
     VPNStatusViewSet,
     FirewallRuleViewSet,
     UserDeviceViewSet,
@@ -35,11 +32,8 @@ router.register("admin_users", AdminUserViewSet, basename="admin-users")
 
 # analyzer
 router.register("networks", NetworkViewSet, basename="network")
-router.register("devices", DeviceViewSet, basename="device")
-router.register("transfers", DataTransferViewSet, basename="transfer")
 router.register("image-transfers", ImageTransferViewSet, basename="image-transfer")
 router.register("firewall-logs", FirewallLogViewSet, basename="firewall-log")
-router.register("vpn-servers", VPNServerViewSet, basename="vpn-server")
 router.register("vpn-status", VPNStatusViewSet, basename="vpn-status")
 router.register("firewall-rules", FirewallRuleViewSet, basename="firewall-rule")
 router.register("user-devices", UserDeviceViewSet, basename="user-device")

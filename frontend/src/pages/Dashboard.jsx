@@ -9,7 +9,7 @@ import {
 } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import { useNetwork } from '../context/NetworkContext';
-import { networksApi, devicesApi, firewallApi, userDevicesApi, adminUsersApi } from '../api';
+import { networksApi, firewallApi, userDevicesApi, adminUsersApi } from '../api';
 
 const StatCard = ({ label, value, unit, icon: Icon, data, color }) => {
   const colorMap = {
@@ -71,15 +71,12 @@ const Dashboard = ({ userType }) => {
   const [currentDevice, setCurrentDevice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeRules, setActiveRules] = useState(0);
-  const [throughputImpact, setThroughputImpact] = useState(0);
-  const [latencyOverhead, setLatencyOverhead] = useState(0);
-  const [lastUpdatedRules, setLastUpdatedRules] = useState('Just now');
+  const [lastUpdatedRules, setLastUpdatedRules] = useState('No active rules');
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [dRes, eRes, udRes, rRes, uRes] = await Promise.allSettled([
-          devicesApi.list(),
+        const [eRes, udRes, rRes, uRes] = await Promise.allSettled([
           firewallApi.logs(),
           userDevicesApi.list(),
           firewallApi.rules(),
@@ -93,7 +90,6 @@ const Dashboard = ({ userType }) => {
             Array.isArray(data) ? data : [];
         };
 
-        const fetchedDevices = getArray(dRes);
         const fetchedEvents = getArray(eRes);
         const fetchedUserDevices = getArray(udRes);
         const fetchedRules = getArray(rRes);
@@ -134,12 +130,6 @@ const Dashboard = ({ userType }) => {
 
         // Combine devices and user devices for the list
         const allDevs = [
-          ...fetchedDevices.map(d => ({
-            ...d,
-            ip: d.ip_address,
-            status: d.status || 'ACTIVE',
-            source: 'infrastructure'
-          })),
           ...fetchedUserDevices
             .filter(d => d.user_type !== 'ADMIN')
             .map(ud => ({
@@ -210,20 +200,6 @@ const Dashboard = ({ userType }) => {
         // Calculate dynamic impact analysis statistics based on live database metrics
         const activeRulesList = fetchedRules.filter(r => r.is_active);
         setActiveRules(activeRulesList.length);
-
-        const totalThroughputImpact = fetchedEvents.reduce((sum, log) => sum + (log.throughput_impact || 0), 0);
-        const totalLatencyOverhead = fetchedEvents.reduce((sum, log) => sum + (log.latency_impact || 0), 0);
-
-        const computedThroughputImpact = activeRulesList.length > 0
-          ? Math.min(25, activeRulesList.length * 1.2 + (totalThroughputImpact || 0))
-          : 0;
-
-        const computedLatencyOverhead = activeRulesList.length > 0
-          ? Math.min(30, activeRulesList.length * 1.5 + (totalLatencyOverhead || 0))
-          : 0;
-
-        setThroughputImpact(Math.round(computedThroughputImpact) || 2); // Baseline minimum for visual representation
-        setLatencyOverhead(Math.round(computedLatencyOverhead) || 3);
 
         if (activeRulesList.length > 0) {
           const latestRule = activeRulesList[0];
@@ -515,47 +491,36 @@ const Dashboard = ({ userType }) => {
           </div>
         </div>
 
-        {/* Impact Analysis */}
-        <div className="lg:col-span-1 bg-[#16191f] border border-slate-800 rounded-2xl p-6 relative overflow-hidden group flex flex-col justify-between h-[380px]">
-          <div className="absolute inset-0 bg-blue-600/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+        {/* Firewall & Security Status */}
+        <div className="lg:col-span-1 bg-[#16191f] border border-slate-800 rounded-2xl p-5 flex flex-col justify-between h-[380px]">
           <div>
-            <h3 className="font-bold mb-1 text-white">Impact Analysis</h3>
-            <p className="text-xs text-slate-500 mb-6 font-medium">How firewall rules affect throughput.</p>
-
-            <div className="space-y-6">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase">Throughput Impact</span>
-                  <span className="text-xs font-bold text-red-500">-{throughputImpact}%</span>
-                </div>
-                <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-red-500" style={{ width: `${100 - throughputImpact}%`, transition: 'width 1s ease-in-out' }} />
-                </div>
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <h3 className="font-bold text-white">Security & Rules</h3>
+              <ShieldAlert className="w-5 h-5 text-sky-500" />
+            </div>
+            <div className="mt-6 space-y-4">
+              <div className="flex justify-between items-center bg-slate-800/20 p-3 rounded-xl border border-slate-800/40">
+                <span className="text-xs text-slate-400">Active Rules</span>
+                <span className="text-sm font-bold text-white">{activeRules}</span>
               </div>
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase">Latency Overhead</span>
-                  <span className="text-xs font-bold text-blue-500">+{latencyOverhead}%</span>
-                </div>
-                <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-500" style={{ width: `${Math.min(100, Math.max(10, latencyOverhead * 3))}%`, transition: 'width 1s ease-in-out' }} />
-                </div>
+              <div className="flex justify-between items-center bg-slate-800/20 p-3 rounded-xl border border-slate-800/40">
+                <span className="text-xs text-slate-400">Firewall Status</span>
+                <span className={`text-xs font-bold px-2 py-0.5 rounded uppercase tracking-wider ${firewallOn ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
+                  {firewallOn ? 'Enabled' : 'Disabled'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center bg-slate-800/20 p-3 rounded-xl border border-slate-800/40">
+                <span className="text-xs text-slate-400">Last Rule Update</span>
+                <span className="text-xs font-medium text-slate-300">{lastUpdatedRules}</span>
               </div>
             </div>
           </div>
-
-          <div className="mt-auto pt-6">
-            <div className="p-4 bg-slate-800/30 rounded-xl border border-slate-800">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-slate-300">Active Rules</span>
-                <span className="text-xs font-bold text-white">{activeRules}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-500">Last updated</span>
-                <span className="text-[10px] font-bold text-slate-600 uppercase">{lastUpdatedRules}</span>
-              </div>
-            </div>
-          </div>
+          <button
+            onClick={() => navigate('/devices')}
+            className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1"
+          >
+            Manage Firewall Settings <ChevronRight className="w-4 h-4" />
+          </button>
         </div>
       </div>
     </div>
