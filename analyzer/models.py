@@ -19,16 +19,21 @@ class FirewallLog(models.Model):
         ('BLOCK', 'Block'),
         ('ATTACK_DETECTED', 'Attack Detected'),
     )
+    PROTOCOL_CHOICES = (
+        ('TCP', 'TCP'),
+    )
     action = models.CharField(max_length=20, choices=ACTION_CHOICES)
     source_ip = models.GenericIPAddressField()
     destination_ip = models.GenericIPAddressField(null=True, blank=True)
+    port = models.IntegerField(null=True, blank=True)
+    protocol = models.CharField(max_length=10, choices=PROTOCOL_CHOICES, default='TCP')
     reason = models.TextField(null=True, blank=True)
     latency_impact = models.FloatField(default=0.0)
     throughput_impact = models.FloatField(default=0.0)
     timestamp = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.action}: {self.source_ip} at {self.timestamp}"
+        return f"[{self.protocol}] {self.action}: {self.source_ip} at {self.timestamp}"
 
 class FirewallRule(models.Model):
     TYPE_CHOICES = (
@@ -46,7 +51,7 @@ class FirewallRule(models.Model):
     ip_address = models.CharField(max_length=100, null=True, blank=True, help_text="Specific IP or Subnet")
     mac_address = models.CharField(max_length=100, null=True, blank=True)
     port = models.IntegerField(null=True, blank=True)
-    protocol = models.CharField(max_length=10, choices=PROTOCOL_CHOICES, default='ALL')
+    protocol = models.CharField(max_length=10, choices=PROTOCOL_CHOICES, default='TCP')
     is_active = models.BooleanField(default=True)
     hits = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -89,9 +94,14 @@ class UserDevice(models.Model):
 class ImageTransfer(models.Model):
     sender = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='sent_images', on_delete=models.CASCADE)
     receiver = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='received_images', on_delete=models.CASCADE)
-    image = models.ImageField(upload_to='images/')
+    image = models.FileField(upload_to='transfers/')  # FileField supports any media (image, audio, video)
+    file_type = models.CharField(max_length=20, default='IMAGE')  # 'IMAGE', 'AUDIO', 'VIDEO'
+    file_name = models.CharField(max_length=255, default='file')
+    file_size = models.BigIntegerField(default=0)
+    transfer_duration = models.FloatField(default=0.0)  # in seconds
+    ping = models.FloatField(default=0.0)  # in ms
     timestamp = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, default='COMPLETED')
 
     def __str__(self):
-        return f"Image from {self.sender.email} to {self.receiver.email}"
+        return f"{self.file_type} from {self.sender.email} to {self.receiver.email}"

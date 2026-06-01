@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { networksApi, firewallApi, vpnApi, userDevicesApi, adminUsersApi } from '../api';
+import { vpnApi, userDevicesApi, adminUsersApi } from '../api';
 
 const NetworkContext = createContext(undefined);
 

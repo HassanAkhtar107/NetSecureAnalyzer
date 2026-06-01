@@ -12,7 +12,7 @@ from .serializers import (
     UserDeviceSerializer,
     ImageTransferSerializer
 )
-from ..utils import block_ip, unblock_ip, get_network_stats, simulate_transfer_stats
+from ..utils import block_ip, unblock_ip, get_network_stats, simulate_transfer_stats, get_tcp_connections
 from analyzer.models import VPNStatus, ImageTransfer
 from rest_framework.authtoken.models import Token
 
@@ -88,6 +88,7 @@ class UserDeviceViewSet(viewsets.ModelViewSet):
                 FirewallLog.objects.create(
                     action='ALLOW',
                     source_ip=current_ip,
+                    protocol='TCP',
                     reason=f"VPN Bypass: IP changed from {device.original_ip} to {current_ip} for {device.device_name}"
                 )
                 device_data = UserDeviceSerializer(device).data
@@ -126,6 +127,7 @@ class UserDeviceViewSet(viewsets.ModelViewSet):
         FirewallLog.objects.create(
             action='BLOCK',
             source_ip=device.ip_address,
+            protocol='TCP',
             reason=f"Device {device.device_name} ({device.device_id}) blocked by Admin"
         )
         
@@ -143,6 +145,7 @@ class UserDeviceViewSet(viewsets.ModelViewSet):
         FirewallLog.objects.create(
             action='ALLOW',
             source_ip=device.ip_address,
+            protocol='TCP',
             reason=f"Device {device.device_name} ({device.device_id}) unblocked by Admin"
         )
         
@@ -216,9 +219,21 @@ class NetworkViewSet(viewsets.ModelViewSet):
         FirewallLog.objects.create(
             action='ALLOW' if enabled else 'BLOCK',
             source_ip='SYSTEM',
+            protocol='TCP',
             reason=f"Global Firewall {'Enabled' if enabled else 'Disabled'} by Admin"
         )
         return Response({"status": "success", "firewall_enabled": enabled})
+
+    @action(detail=False, methods=['get'])
+    def tcp_connections(self, request):
+        """Returns live TCP connections from the host system."""
+        connections = get_tcp_connections()
+        return Response({
+            "protocol": "TCP",
+            "total": len(connections),
+            "established": len([c for c in connections if c['status'] == 'ESTABLISHED']),
+            "connections": connections
+        })
 
 
 

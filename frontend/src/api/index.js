@@ -39,6 +39,7 @@ export const networksApi = {
     create: (data) => api.post('/networks/'),
     globalStats: () => api.get('/networks/global_stats/'),
     myStats: () => api.get('/networks/my_network_stats/'),
+    tcpConnections: () => api.get('/networks/tcp_connections/'),
 };
 
 

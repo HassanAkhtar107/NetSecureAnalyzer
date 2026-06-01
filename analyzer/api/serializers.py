@@ -40,5 +40,9 @@ class ImageTransferSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ImageTransfer
-        fields = ['id', 'sender', 'sender_email', 'receiver', 'receiver_email', 'image', 'timestamp', 'status']
+        fields = [
+            'id', 'sender', 'sender_email', 'receiver', 'receiver_email', 
+            'image', 'file_type', 'file_name', 'file_size', 
+            'transfer_duration', 'ping', 'timestamp', 'status'
+        ]
         read_only_fields = ['sender', 'status', 'timestamp']

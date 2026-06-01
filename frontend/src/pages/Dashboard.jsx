@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   Download, Upload, Activity, Zap, ShieldAlert, MoreVertical, Plus,
-  ChevronRight, Laptop, Cpu, Smartphone, Tv, HardDrive, Filter, Clock
+  ChevronRight, Laptop, Cpu, Smartphone, Tv, HardDrive, Filter, Clock,
+  Terminal, Globe
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -72,7 +73,7 @@ const Dashboard = ({ userType }) => {
   const [loading, setLoading] = useState(true);
   const [activeRules, setActiveRules] = useState(0);
   const [lastUpdatedRules, setLastUpdatedRules] = useState('No active rules');
-
+  const [tcpConnectionsData, setTcpConnectionsData] = useState({ total: 0, established: 0, connections: [] });
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -208,6 +209,13 @@ const Dashboard = ({ userType }) => {
           setLastUpdatedRules(diffMinutes < 60 ? `${diffMinutes} mins ago` : `${Math.round(diffMinutes / 60)} hours ago`);
         } else {
           setLastUpdatedRules('No active rules');
+        }
+
+        try {
+          const tcpRes = await networksApi.tcpConnections();
+          setTcpConnectionsData(tcpRes.data);
+        } catch (tcpErr) {
+          console.error("TCP Connections fetch error", tcpErr);
         }
       } catch (err) {
         console.error("Dashboard fetch error", err);
@@ -478,7 +486,9 @@ const Dashboard = ({ userType }) => {
                 <div className="flex items-center gap-3">
                   <div className={`w-2 h-2 rounded-full ${event.action === 'BLOCK' ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" : "bg-green-500"}`} />
                   <div>
-                    <div className="text-sm font-semibold text-slate-200">{event.action === 'BLOCK' ? 'Blocked' : 'Allowed'} traffic from {event.source_ip}</div>
+                    <div className="text-sm font-semibold text-slate-200">
+                      {event.action === 'BLOCK' ? 'Blocked' : 'Allowed'} {event.protocol || 'TCP'} traffic from {event.source_ip}{event.port ? `:${event.port}` : ''}
+                    </div>
                     <div className="text-[10px] text-slate-500">{new Date(event.timestamp).toLocaleTimeString()}</div>
                   </div>
                 </div>
@@ -510,6 +520,10 @@ const Dashboard = ({ userType }) => {
                 </span>
               </div>
               <div className="flex justify-between items-center bg-slate-800/20 p-3 rounded-xl border border-slate-800/40">
+                <span className="text-xs text-slate-400">Active TCP Sockets</span>
+                <span className="text-xs font-bold text-sky-400">{tcpConnectionsData.established} Established</span>
+              </div>
+              <div className="flex justify-between items-center bg-slate-800/20 p-3 rounded-xl border border-slate-800/40">
                 <span className="text-xs text-slate-400">Last Rule Update</span>
                 <span className="text-xs font-medium text-slate-300">{lastUpdatedRules}</span>
               </div>
@@ -521,6 +535,73 @@ const Dashboard = ({ userType }) => {
           >
             Manage Firewall Settings <ChevronRight className="w-4 h-4" />
           </button>
+        </div>
+      </div>
+
+      {/* TCP Connection Traffic Monitor */}
+      <div className="bg-[#16191f] border border-slate-800 rounded-2xl overflow-hidden shadow-xl mt-6">
+        <div className="p-5 border-b border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-sky-500/10 text-sky-400">
+              <Terminal className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-white">TCP Connection Traffic Monitor</h3>
+              <p className="text-xs text-slate-500">Real-time socket states over TCP protocol directly from host system.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-sky-500/10 text-sky-400 uppercase tracking-widest border border-sky-500/20">Protocol: TCP</span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 uppercase tracking-widest border border-emerald-500/20">Active: {tcpConnectionsData.total}</span>
+          </div>
+        </div>
+        <div className="overflow-x-auto max-h-[350px] custom-scrollbar">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="bg-[#0d1117]/50 text-slate-500 text-[10px] font-bold uppercase tracking-widest border-b border-slate-800">
+                <th className="px-6 py-3">Process</th>
+                <th className="px-6 py-3">Local Address</th>
+                <th className="px-6 py-3">Remote Address</th>
+                <th className="px-6 py-3">PID</th>
+                <th className="px-6 py-3">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/40">
+              {tcpConnectionsData.connections.map((conn, idx) => (
+                <tr key={idx} className="hover:bg-slate-800/10 transition-colors">
+                  <td className="px-6 py-3.5 flex items-center gap-2">
+                    <Terminal className="w-3.5 h-3.5 text-slate-500" />
+                    <span className="text-sm font-semibold text-slate-300">{conn.process}</span>
+                  </td>
+                  <td className="px-6 py-3.5">
+                    <span className="text-xs font-mono text-slate-400">{conn.local_ip}:{conn.local_port}</span>
+                  </td>
+                  <td className="px-6 py-3.5 flex items-center gap-1.5">
+                    <Globe className="w-3.5 h-3.5 text-slate-500" />
+                    <span className="text-xs font-mono text-slate-400">{conn.remote_ip}:{conn.remote_port}</span>
+                  </td>
+                  <td className="px-6 py-3.5">
+                    <span className="text-xs font-mono text-slate-500">{conn.pid}</span>
+                  </td>
+                  <td className="px-6 py-3.5">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${conn.status === 'ESTABLISHED' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                      conn.status === 'TIME_WAIT' ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20' :
+                        'bg-slate-800 text-slate-500 border border-slate-700/50'
+                      }`}>
+                      {conn.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {tcpConnectionsData.connections.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-6 py-12 text-center text-slate-500 text-sm italic">
+                    No active TCP sockets detected.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
