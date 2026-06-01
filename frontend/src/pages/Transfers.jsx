@@ -187,7 +187,7 @@ const Transfers = ({ userType }) => {
       if (!matchesQuery) return false;
 
       if (userType === 'ADMIN') return true;
-      return currentUser && t.sender === currentUser.id;
+      return currentUser && String(t.sender) === String(currentUser.id);
     });
   }, [transfers, query, userType, currentUser]);
 
@@ -362,11 +362,11 @@ const Transfers = ({ userType }) => {
                       <div className="flex flex-col gap-1">
                         <div className="text-[10px] text-slate-400 flex items-center gap-1.5">
                           <span className="font-bold text-[9px] text-emerald-400 uppercase tracking-widest bg-emerald-500/10 px-1 py-0.5 rounded border border-emerald-500/20">From</span>
-                          <span className="font-semibold">{receiverEmail}</span>
+                          <span className="font-semibold">{items[0].sender_email}</span>
                         </div>
                         <div className="text-[10px] text-slate-400 flex items-center gap-1.5">
                           <span className="font-bold text-[9px] text-sky-400 uppercase tracking-widest bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20">To</span>
-                          <span className="font-semibold">{items[0].sender_email}</span>
+                          <span className="font-semibold">{receiverEmail}</span>
                         </div>
                       </div>
                     </div>
@@ -403,6 +403,14 @@ const Transfers = ({ userType }) => {
                                   {getFileIcon(t.file_type)} {t.file_type}
                                 </span>
                                 <span>·</span>
+                                {userType === 'ADMIN' && (
+                                  <>
+                                    <span className="text-emerald-400">From: {t.sender_email}</span>
+                                    <span>·</span>
+                                    <span className="text-sky-400">To: {t.receiver_email}</span>
+                                    <span>·</span>
+                                  </>
+                                )}
                                 <span>{formatBytes(t.file_size || 0)}</span>
                                 <span>·</span>
                                 <span>{formatDistanceToNow(new Date(t.timestamp), { addSuffix: true })}</span>

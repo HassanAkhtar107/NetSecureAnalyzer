@@ -39,7 +39,7 @@ const Received = ({ userType }) => {
       setAllTransfers(dataArray);
 
       // Filter where current user is the receiver
-      const received = dataArray.filter(file => file.receiver === userData.id);
+      const received = dataArray.filter(file => String(file.receiver) === String(userData.id));
       setReceivedFiles(received);
     } catch (err) {
       console.error("Failed to fetch received data", err);

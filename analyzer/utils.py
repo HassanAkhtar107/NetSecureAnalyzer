@@ -31,7 +31,7 @@ def unblock_ip(ip_address):
 def get_tcp_connections():
     """
     Returns real active TCP connections from the system using psutil.
-    Each connection includes local/remote addresses, ports, status, and associated PID.
+    Only includes connections belonging to our web application (Django backend/Node dev server).
     """
     connections = []
     try:
@@ -43,16 +43,21 @@ def get_tcp_connections():
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     proc_name = 'Unknown'
 
-                connections.append({
-                    'local_ip': conn.laddr.ip if conn.laddr else '-',
-                    'local_port': conn.laddr.port if conn.laddr else 0,
-                    'remote_ip': conn.raddr.ip if conn.raddr else '-',
-                    'remote_port': conn.raddr.port if conn.raddr else 0,
-                    'status': conn.status,
-                    'pid': conn.pid or 0,
-                    'process': proc_name,
-                    'protocol': 'TCP',
-                })
+                # Filter: Only show python, node, or connections on ports 8000 / 5173
+                is_app_process = any(x in proc_name.lower() for x in ['python', 'node'])
+                is_app_port = (conn.laddr.port in [8000, 5173]) or (conn.raddr.port in [8000, 5173])
+
+                if is_app_process or is_app_port:
+                    connections.append({
+                        'local_ip': conn.laddr.ip if conn.laddr else '-',
+                        'local_port': conn.laddr.port if conn.laddr else 0,
+                        'remote_ip': conn.raddr.ip if conn.raddr else '-',
+                        'remote_port': conn.raddr.port if conn.raddr else 0,
+                        'status': conn.status,
+                        'pid': conn.pid or 0,
+                        'process': proc_name,
+                        'protocol': 'TCP',
+                    })
     except (psutil.AccessDenied, PermissionError):
         # Return a sample set when running without admin privileges
         connections = _get_sample_tcp_connections()
@@ -61,25 +66,73 @@ def get_tcp_connections():
 
 def _get_sample_tcp_connections():
     """
-    Returns simulated TCP connections when psutil cannot access real data
-    (e.g. non-admin context).
+    Returns simulated TCP connections for our web app context
+    when psutil cannot access real data.
     """
     import random
     statuses = ['ESTABLISHED', 'ESTABLISHED', 'ESTABLISHED', 'TIME_WAIT', 'CLOSE_WAIT']
-    processes = ['chrome.exe', 'python.exe', 'node.exe', 'svchost.exe', 'explorer.exe', 'msedge.exe']
-    sample = []
-    for i in range(random.randint(8, 15)):
+    sample = [
+        # React Dev Server
+        {
+            'local_ip': '127.0.0.1',
+            'local_port': 5173,
+            'remote_ip': '127.0.0.1',
+            'remote_port': random.randint(50000, 65000),
+            'status': 'ESTABLISHED',
+            'pid': random.randint(3000, 9000),
+            'process': 'node.exe',
+            'protocol': 'TCP',
+        },
+        # Django Backend Server
+        {
+            'local_ip': '127.0.0.1',
+            'local_port': 8000,
+            'remote_ip': '127.0.0.1',
+            'remote_port': random.randint(50000, 65000),
+            'status': 'ESTABLISHED',
+            'pid': random.randint(10000, 20000),
+            'process': 'python.exe',
+            'protocol': 'TCP',
+        },
+        # Browser Tab to React Frontend
+        {
+            'local_ip': '127.0.0.1',
+            'local_port': random.randint(50000, 65000),
+            'remote_ip': '127.0.0.1',
+            'remote_port': 5173,
+            'status': 'ESTABLISHED',
+            'pid': random.randint(4000, 9500),
+            'process': 'chrome.exe',
+            'protocol': 'TCP',
+        },
+        # Browser Tab to Django API
+        {
+            'local_ip': '127.0.0.1',
+            'local_port': random.randint(50000, 65000),
+            'remote_ip': '127.0.0.1',
+            'remote_port': 8000,
+            'status': 'ESTABLISHED',
+            'pid': random.randint(4000, 9500),
+            'process': 'chrome.exe',
+            'protocol': 'TCP',
+        },
+    ]
+    
+    # Add a few transient TIME_WAIT or CLOSE_WAIT connections for realism
+    for i in range(random.randint(1, 3)):
+        port = random.choice([8000, 5173])
         sample.append({
             'local_ip': '127.0.0.1',
-            'local_port': random.randint(49152, 65535),
-            'remote_ip': f'{random.randint(1, 223)}.{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(1, 254)}',
-            'remote_port': random.choice([80, 443, 8080, 3000, 5432, 8000, 22, 3306]),
-            'status': random.choice(statuses),
-            'pid': random.randint(1000, 20000),
-            'process': random.choice(processes),
+            'local_port': port if random.choice([True, False]) else random.randint(50000, 65000),
+            'remote_ip': '127.0.0.1',
+            'remote_port': random.randint(50000, 65000) if port == 8000 or port == 5173 else port,
+            'status': random.choice(statuses[3:]),
+            'pid': random.randint(3000, 20000),
+            'process': random.choice(['python.exe', 'node.exe', 'chrome.exe']),
             'protocol': 'TCP',
         })
     return sample
+
 
 
 # In-memory storage for tracking elapsed system I/O bytes to compute live speeds

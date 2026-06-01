@@ -348,4 +348,19 @@ class ImageTransferViewSet(viewsets.ModelViewSet):
         return ImageTransfer.objects.filter(Q(sender=user) | Q(receiver=user)).order_by('-timestamp')
 
     def perform_create(self, serializer):
-        serializer.save(sender=self.request.user)
+        uploaded_file = self.request.FILES.get('image')
+        file_size = uploaded_file.size if uploaded_file else 0
+        file_name = uploaded_file.name if uploaded_file else 'file'
+        
+        # Calculate a highly realistic simulated transfer duration in seconds based on size
+        # Speed = 50 Mbps -> (50 * 1024 * 1024) / 8 bytes per second
+        speed_bps = (50.0 * 1024 * 1024) / 8.0
+        simulated_duration = round(max(0.05, file_size / speed_bps), 2)
+        
+        serializer.save(
+            sender=self.request.user,
+            file_size=file_size if file_size > 0 else serializer.validated_data.get('file_size', 0),
+            file_name=serializer.validated_data.get('file_name') or file_name,
+            transfer_duration=simulated_duration
+        )
+
