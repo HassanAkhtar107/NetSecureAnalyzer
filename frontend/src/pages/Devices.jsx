@@ -114,7 +114,7 @@ const Devices = ({ userType }) => {
             ...d,
             id: `ud-${d.id}`,
             name: d.device_name || d.user_email || 'Unnamed Device',
-            status: d.is_blocked ? 'BLOCKED' : (d.vpn_status ? 'VPN ACTIVE' : 'ACTIVE'),
+            status: d.is_blocked ? (d.vpn_status ? 'VPN BYPASS' : 'BLOCKED') : (d.vpn_status ? 'VPN ACTIVE' : 'ACTIVE'),
             source: 'user_registration',
           })),
         ...userPlaceholders.map(u => ({
@@ -179,10 +179,19 @@ const Devices = ({ userType }) => {
     return () => clearInterval(interval);
   }, [userType]);
 
+  useEffect(() => {
+    if (selectedDevice) {
+      const updated = devices.find(d => d.id === selectedDevice.id);
+      if (updated) {
+        setSelectedDevice(updated);
+      }
+    }
+  }, [devices, selectedDevice]);
+
   const counts = useMemo(() => {
     return {
       total: devices.length,
-      active: devices.filter(d => d.status === 'ACTIVE' || d.status === 'VPN ACTIVE').length,
+      active: devices.filter(d => d.status === 'ACTIVE' || d.status === 'VPN ACTIVE' || d.status === 'VPN BYPASS').length,
       blocked: devices.filter(d => d.status === 'BLOCKED').length
     };
   }, [devices]);
@@ -192,7 +201,7 @@ const Devices = ({ userType }) => {
       const q = query.toLowerCase();
       const matchesQuery = !q || (d.name?.toLowerCase().includes(q) || d.ip_address?.includes(q));
       const matchesStatus = statusFilter === 'all' ||
-        (statusFilter === 'active' && (d.status?.toUpperCase() === 'ACTIVE' || d.status?.toUpperCase() === 'VPN ACTIVE')) ||
+        (statusFilter === 'active' && (d.status?.toUpperCase() === 'ACTIVE' || d.status?.toUpperCase() === 'VPN ACTIVE' || d.status?.toUpperCase() === 'VPN BYPASS')) ||
         (statusFilter === 'blocked' && d.status?.toUpperCase() === 'BLOCKED');
       const matchesType = typeFilter === 'all' || d.type?.toLowerCase() === typeFilter.toLowerCase();
       return matchesQuery && matchesStatus && matchesType;
@@ -290,6 +299,7 @@ const Devices = ({ userType }) => {
                   <th className="px-6 py-3">Device</th>
                   <th className="px-6 py-3">email</th>
                   <th className="px-6 py-3">Address</th>
+                  <th className="px-6 py-3">VPN Status</th>
                   <th className="px-6 py-3">Status</th>
                   <th className="px-6 py-3 w-10"></th>
                 </tr>
@@ -316,20 +326,41 @@ const Devices = ({ userType }) => {
                       <p className="text-xs font-mono text-slate-400">{d.user_email || 'Unknown'}</p>
                     </td>
                     <td className="px-6 py-4">
-                      <p className="text-xs font-mono text-slate-400">{d.ip_address}</p>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-xs font-mono text-slate-300">{d.ip_address}</span>
+                        {d.vpn_status && d.original_ip && d.original_ip !== d.ip_address && (
+                          <span className="text-[10px] font-mono text-slate-500">
+                            Real: {d.original_ip}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      {d.vpn_status ? (
+                        <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 font-bold uppercase tracking-tighter">
+                          <Globe className="mr-1 h-3 w-3 inline-block animate-pulse" />
+                          VPN ON
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-slate-800 text-slate-500 border-slate-700/50 font-bold uppercase tracking-tighter">
+                          VPN Off
+                        </Badge>
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       <Badge
                         className={cn(
                           "font-bold uppercase tracking-tighter",
                           d.status === 'BLOCKED' ? "bg-rose-500/10 text-rose-500 border-rose-500/20" :
-                            d.status === 'VPN ACTIVE' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
-                              "bg-sky-500/10 text-sky-400 border-sky-500/20"
+                            d.status === 'VPN BYPASS' ? "bg-amber-500/10 text-amber-500 border-amber-500/20" :
+                              d.status === 'VPN ACTIVE' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
+                                "bg-sky-500/10 text-sky-400 border-sky-500/20"
                         )}
                       >
                         <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${d.status === 'BLOCKED' ? 'bg-rose-500' :
-                          d.status === 'VPN ACTIVE' ? 'bg-emerald-400 animate-pulse' :
-                            'bg-sky-500'
+                          d.status === 'VPN BYPASS' ? 'bg-amber-500 animate-pulse' :
+                            d.status === 'VPN ACTIVE' ? 'bg-emerald-400 animate-pulse' :
+                              'bg-sky-500'
                           }`} />
                         {d.status}
                       </Badge>
@@ -343,7 +374,7 @@ const Devices = ({ userType }) => {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
 
-                          {d.status !== 'BLOCKED' ? (
+                          {d.status !== 'BLOCKED' && d.status !== 'VPN BYPASS' ? (
                             <DropdownMenuItem onClick={() => handleBlock(d)}>
                               <ShieldOff className="mr-2 h-4 w-4 text-rose-500" /> Block Access
                             </DropdownMenuItem>

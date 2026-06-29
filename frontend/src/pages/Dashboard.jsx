@@ -139,7 +139,7 @@ const Dashboard = ({ userType }) => {
               name: ud.device_name || ud.user_email || 'Unnamed Device',
               ip: ud.ip_address,
               ip_address: ud.ip_address,
-              status: ud.is_blocked ? 'BLOCKED' : (ud.vpn_status ? 'VPN ACTIVE' : 'ACTIVE'),
+              status: ud.is_blocked ? (ud.vpn_status ? 'VPN BYPASS' : 'BLOCKED') : (ud.vpn_status ? 'VPN ACTIVE' : 'ACTIVE'),
               source: 'user_registration',
               type: 'Laptop', // Default icon
               user_email: ud.user_email,
@@ -235,7 +235,6 @@ const Dashboard = ({ userType }) => {
           upload: s.upload_speed,
           ping: s.ping,
           jitter: s.jitter,
-          packetLoss: s.packet_loss * 100 // Convert to percentage
         };
 
         setMetrics(prev => {
@@ -248,7 +247,6 @@ const Dashboard = ({ userType }) => {
               upload: Math.max(0.1, newMetric.upload + (Math.random() - 0.5) * (newMetric.upload * 0.15)),
               ping: Math.max(1.0, newMetric.ping + (Math.random() - 0.5) * 1.5),
               jitter: Math.max(0.1, newMetric.jitter + (Math.random() - 0.5) * 0.4),
-              packetLoss: Math.max(0.0, newMetric.packetLoss + (Math.random() - 0.5) * 0.005)
             }));
           }
           return [...prev.slice(-19), newMetric];
@@ -270,7 +268,7 @@ const Dashboard = ({ userType }) => {
     };
   }, [userType]);
 
-  const latest = metrics[metrics.length - 1] || { download: 0, upload: 0, ping: 0, jitter: 0, packetLoss: 0 };
+  const latest = metrics[metrics.length - 1] || { download: 0, upload: 0, ping: 0, jitter: 0 };
 
   return (
     <div className="space-y-6">
@@ -290,7 +288,7 @@ const Dashboard = ({ userType }) => {
       </div>
 
       {/* Quick Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Download"
           value={latest.download.toFixed(1)}
@@ -322,14 +320,6 @@ const Dashboard = ({ userType }) => {
           icon={Zap}
           color="orange"
           data={metrics.map(m => ({ value: m.jitter }))}
-        />
-        <StatCard
-          label="Packet Loss"
-          value={latest.packetLoss.toFixed(2)}
-          unit="%"
-          icon={ShieldAlert}
-          color="red"
-          data={metrics.map(m => ({ value: m.packetLoss }))}
         />
       </div>
 
@@ -442,7 +432,10 @@ const Dashboard = ({ userType }) => {
             {devices.map((device, idx) => (
               <div key={device.id || idx} className="flex items-center justify-between p-3 hover:bg-slate-800/50 rounded-xl transition-colors">
                 <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${device.status === 'Active' ? "bg-blue-500/10 text-blue-500" : "bg-slate-800 text-slate-500"}`}>
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${device.status?.toUpperCase() === 'ACTIVE' || device.status?.toUpperCase() === 'VPN ACTIVE' || device.status?.toUpperCase() === 'VPN BYPASS'
+                    ? "bg-blue-500/10 text-blue-500"
+                    : "bg-slate-800 text-slate-500"
+                    }`}>
                     {device.type === 'Laptop' ? <Laptop className="w-5 h-5" /> :
                       device.type === 'Office PC' ? <Cpu className="w-5 h-5" /> :
                         device.type === 'Smartphone' ? <Smartphone className="w-5 h-5" /> :
@@ -457,8 +450,9 @@ const Dashboard = ({ userType }) => {
                 </div>
                 <div className="flex items-center gap-4">
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${device.status?.toUpperCase() === 'ACTIVE' || device.status?.toUpperCase() === 'VPN ACTIVE' ? "bg-blue-500/10 text-blue-500" :
-                    device.status?.toUpperCase() === 'BLOCKED' ? "bg-red-500/10 text-red-500" :
-                      "bg-orange-500/10 text-orange-500"
+                    device.status?.toUpperCase() === 'VPN BYPASS' ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" :
+                      device.status?.toUpperCase() === 'BLOCKED' ? "bg-red-500/10 text-red-500" :
+                        "bg-orange-500/10 text-orange-500"
                     }`}>
                     {device.status || 'ACTIVE'}
                   </span>
